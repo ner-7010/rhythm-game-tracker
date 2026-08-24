@@ -22,7 +22,6 @@ export default function DashboardPage() {
   const [newMaxTerm, setNewMaxTerm] = useState('MAX / 理論値');
   const [newDevice, setNewDevice] = useState<'Mobile' | 'Arcade'>('Mobile');
 
-  // Load stored games & records on mount
   useEffect(() => {
     const loadedGames = getStoredGames();
     const loadedRecords = getStoredRecords();
@@ -30,9 +29,9 @@ export default function DashboardPage() {
     setRecords(loadedRecords);
   }, []);
 
-  // Compute live game counts based on actual records
+  // Compute live game counts based on actual played records
   const gamesWithLiveCounts = games.map(g => {
-    const gameRecs = records.filter(r => r.gameId === g.id);
+    const gameRecs = records.filter(r => r.gameId === g.id && r.isPlayed);
     const ap = gameRecs.filter(r => r.isAp).length;
     const max = gameRecs.filter(r => r.isMax).length;
     return {
@@ -67,6 +66,7 @@ export default function DashboardPage() {
       maxTerm: newMaxTerm || 'MAX',
       device: newDevice,
       gradeMasters: [
+        { id: 'g0', name: '未プレイ', category: 'Unplayed' },
         { id: 'g1', name: newMaxTerm || '理論値', category: 'MAX' },
         { id: 'g2', name: newApTerm || 'AP', category: 'AP' },
         { id: 'g3', name: 'Full Combo', category: 'FC' },
@@ -89,11 +89,12 @@ export default function DashboardPage() {
     setIsModalOpen(false);
   };
 
-  // Calculate History Stacked Data for Chart dynamically from records
-  const totalApRecords = records.filter(r => r.isAp).length;
-  const totalFcRecords = records.filter(r => r.isFc && !r.isAp).length;
-  const totalClearRecords = records.filter(r => r.isClear && !r.isFc && !r.isAp).length;
-  const totalFailedRecords = records.filter(r => !r.isClear).length;
+  // Calculate History Stacked Data (ONLY PLAYED RECORDS)
+  const playedRecords = records.filter(r => r.isPlayed);
+  const totalApRecords = playedRecords.filter(r => r.isAp).length;
+  const totalFcRecords = playedRecords.filter(r => r.isFc && !r.isAp).length;
+  const totalClearRecords = playedRecords.filter(r => r.isClear && !r.isFc && !r.isAp).length;
+  const totalFailedRecords = playedRecords.filter(r => !r.isClear).length;
 
   const chartHistoryData = [
     { date: '過去', apCount: 0, fcCount: 0, clearCount: 0, failedCount: 0 },
@@ -116,21 +117,21 @@ export default function DashboardPage() {
         <div className="bg-[#18181b] border border-zinc-700 p-3 rounded text-xs space-y-1.5 shadow-xl">
           <p className="font-bold text-zinc-200 border-b border-zinc-800 pb-1">{label}</p>
           <div className="space-y-1 font-mono text-[11px]">
-            <div className="flex justify-between space-x-4 text-zinc-100">
-              <span>AP (完全精度):</span>
-              <span className="font-bold">{ap} 曲</span>
+            <div className="flex justify-between space-x-4 text-zinc-100 font-bold">
+              <span>▲ AP (最頂点):</span>
+              <span>{ap} 曲</span>
             </div>
             <div className="flex justify-between space-x-4 text-zinc-300">
               <span>AP + FC 累積:</span>
-              <span className="font-bold">{totalFc} 曲</span>
+              <span>{totalFc} 曲</span>
             </div>
             <div className="flex justify-between space-x-4 text-zinc-400">
               <span>AP + FC + Clear 累積:</span>
-              <span className="font-bold">{totalClear} 曲</span>
+              <span>{totalClear} 曲</span>
             </div>
             <div className="flex justify-between space-x-4 text-zinc-500">
-              <span>総既プレイ数 (失敗含む):</span>
-              <span className="font-bold">{totalPlayed} 曲</span>
+              <span>■ 総既プレイ数 (土台):</span>
+              <span>{totalPlayed} 曲</span>
             </div>
           </div>
         </div>
@@ -204,27 +205,27 @@ export default function DashboardPage() {
 
         <div className="bg-[#121215] border border-zinc-800/80 p-4 rounded-lg">
           <div className="flex items-center justify-between text-zinc-400 text-xs font-medium">
-            <span>総登録楽曲数</span>
+            <span>既プレイ曲数</span>
             <Calendar className="w-4 h-4 text-zinc-400" />
           </div>
           <div className="mt-2">
             <span className="text-2xl font-bold text-zinc-200 num-tabular">
-              {records.length} <span className="text-xs font-normal text-zinc-400">曲</span>
+              {playedRecords.length} <span className="text-xs font-normal text-zinc-400">曲</span>
             </span>
           </div>
-          <span className="text-[11px] text-zinc-500 mt-1 block">プレイ記録全件</span>
+          <span className="text-[11px] text-zinc-500 mt-1 block">全 {records.length} 枠中</span>
         </div>
       </div>
 
-      {/* Growth Trend Graph Section - Stacked Area Chart */}
+      {/* Growth Trend Graph Section - Stacked Area Chart (Pyramid Order: Failed at Bottom -> AP at Top) */}
       <div className="bg-[#121215] border border-zinc-800/80 p-5 rounded-lg space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-zinc-800/80 pb-3">
           <div>
             <h2 className="text-sm font-semibold text-zinc-200 flex items-center gap-2">
-              <TrendingUp className="w-4 h-4 text-zinc-400" /> 成長・リザルト累積推移 (積み上げ)
+              <TrendingUp className="w-4 h-4 text-zinc-400" /> 成長・リザルト累積推移 (ピラミッド積み上げ)
             </h2>
             <p className="text-[11px] text-zinc-500 mt-0.5">
-              下から「AP」→「AP+FC」→「AP+FC+Clear」→「全既プレイ数」の順に積み上げて表示
+              下（土台）から「既プレイ(未Clear)」→「Clear」→「FC」→「AP(頂点)」の順に積み上げて表示
             </p>
           </div>
           
@@ -244,7 +245,7 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Stacked Quiet Area Chart */}
+        {/* Stacked Quiet Area Chart (Reversed Order: failedCount -> clearCount -> fcCount -> apCount) */}
         <div className="h-64 w-full pt-2">
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={chartHistoryData} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
@@ -255,17 +256,18 @@ export default function DashboardPage() {
               <Legend
                 wrapperStyle={{ fontSize: '11px', paddingTop: '10px' }}
                 formatter={(value) => {
-                  if (value === 'apCount') return 'AP数';
-                  if (value === 'fcCount') return 'FC数 (AP除く)';
-                  if (value === 'clearCount') return 'Clear数 (FC除く)';
-                  if (value === 'failedCount') return '既プレイ数 (未Clear含む)';
+                  if (value === 'failedCount') return '既プレイ (未Clear含む / 土台)';
+                  if (value === 'clearCount') return 'Clear';
+                  if (value === 'fcCount') return 'FC';
+                  if (value === 'apCount') return 'AP (頂点)';
                   return value;
                 }}
               />
-              <Area type="monotone" dataKey="apCount" stackId="1" stroke="#e4e4e7" fill="#e4e4e7" fillOpacity={0.8} />
-              <Area type="monotone" dataKey="fcCount" stackId="1" stroke="#a1a1aa" fill="#a1a1aa" fillOpacity={0.6} />
-              <Area type="monotone" dataKey="clearCount" stackId="1" stroke="#71717a" fill="#71717a" fillOpacity={0.4} />
+              {/* Bottom (Base) to Top (Peak) */}
               <Area type="monotone" dataKey="failedCount" stackId="1" stroke="#3f3f46" fill="#3f3f46" fillOpacity={0.3} />
+              <Area type="monotone" dataKey="clearCount" stackId="1" stroke="#71717a" fill="#71717a" fillOpacity={0.4} />
+              <Area type="monotone" dataKey="fcCount" stackId="1" stroke="#a1a1aa" fill="#a1a1aa" fillOpacity={0.6} />
+              <Area type="monotone" dataKey="apCount" stackId="1" stroke="#e4e4e7" fill="#e4e4e7" fillOpacity={0.8} />
             </AreaChart>
           </ResponsiveContainer>
         </div>
@@ -280,7 +282,6 @@ export default function DashboardPage() {
             </h2>
           </div>
 
-          {/* Search & Filter bar */}
           <div className="flex items-center space-x-2">
             <div className="relative">
               <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
