@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { GameTitle, PlayRecord } from '@/lib/types';
 import { getStoredGames, saveStoredGames, getStoredRecords } from '@/lib/storage';
-import { Award, Zap, Gamepad2, TrendingUp, Calendar, ChevronRight, Search, Plus, X, BarChart2, Layers, CheckCircle2, ShieldAlert } from 'lucide-react';
+import { Award, Zap, Gamepad2, TrendingUp, Calendar, ChevronRight, Search, Plus, X, BarChart2, Layers, CheckCircle2 } from 'lucide-react';
 import { ResponsiveContainer, AreaChart, Area, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, Legend } from 'recharts';
 
 export default function DashboardPage() {
@@ -24,6 +24,7 @@ export default function DashboardPage() {
   const [newApTerm, setNewApTerm] = useState('ALL PERFECT');
   const [newMaxTerm, setNewMaxTerm] = useState('MAX / 理論値');
   const [newDevice, setNewDevice] = useState<'Mobile' | 'Arcade'>('Mobile');
+  const [newHasMax, setNewHasMax] = useState<boolean>(true);
 
   useEffect(() => {
     const loadedGames = getStoredGames();
@@ -51,7 +52,7 @@ export default function DashboardPage() {
   const totalClear = playedRecords.filter(r => r.isClear).length;
   const totalFc = playedRecords.filter(r => r.isFc).length;
   const totalAp = gamesWithLiveCounts.reduce((acc, g) => acc + g.apCount, 0);
-  const totalMax = gamesWithLiveCounts.reduce((acc, g) => acc + g.maxCount, 0);
+  const totalMax = gamesWithLiveCounts.filter(g => g.hasMaxConcept !== false).reduce((acc, g) => acc + g.maxCount, 0);
 
   const filteredGames = gamesWithLiveCounts.filter(g => {
     const matchesDevice = filterDevice === 'All' || g.device === filterDevice;
@@ -74,9 +75,10 @@ export default function DashboardPage() {
       apTerm: newApTerm || 'AP',
       maxTerm: newMaxTerm || 'MAX',
       device: newDevice,
+      hasMaxConcept: newHasMax,
       gradeMasters: [
         { id: 'g0', name: '未プレイ', category: 'Unplayed' },
-        { id: 'g1', name: newMaxTerm || '理論値', category: 'MAX' },
+        ...(newHasMax ? [{ id: 'g1', name: newMaxTerm || '理論値', category: 'MAX' as const }] : []),
         { id: 'g2', name: newApTerm || 'AP', category: 'AP' },
         { id: 'g3', name: 'Full Combo', category: 'FC' },
         { id: 'g4', name: 'Clear', category: 'Clear' },
@@ -201,7 +203,7 @@ export default function DashboardPage() {
         </button>
       </div>
 
-      {/* Top Stat Cards Grid (Clear, FC, AP, MAX) */}
+      {/* Top Stat Cards Grid */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <div className="bg-[#121215] border border-zinc-800/80 p-4 rounded-lg">
           <div className="flex items-center justify-between text-zinc-400 text-xs font-medium">
@@ -252,7 +254,7 @@ export default function DashboardPage() {
               {totalMax.toLocaleString()}
             </span>
           </div>
-          <span className="text-[11px] text-zinc-500 mt-1 block">理論値達成</span>
+          <span className="text-[11px] text-zinc-500 mt-1 block">理論値概念あり機種</span>
         </div>
       </div>
 
@@ -451,9 +453,13 @@ export default function DashboardPage() {
                   <span className="text-[10px] text-zinc-400 block truncate" title={game.maxTerm}>
                     {game.maxTerm}
                   </span>
-                  <span className="font-bold text-sky-400 text-sm num-tabular">
-                    {game.maxCount.toLocaleString()} <span className="text-[10px] font-normal text-zinc-500">曲</span>
-                  </span>
+                  {game.hasMaxConcept !== false ? (
+                    <span className="font-bold text-sky-400 text-sm num-tabular">
+                      {game.maxCount.toLocaleString()} <span className="text-[10px] font-normal text-zinc-500">曲</span>
+                    </span>
+                  ) : (
+                    <span className="text-zinc-600 text-xs font-normal">なし (-)</span>
+                  )}
                 </div>
               </div>
             </Link>
@@ -496,14 +502,40 @@ export default function DashboardPage() {
               </div>
 
               <div>
-                <label className="text-zinc-300 font-medium block mb-1">MAX/理論値相当の用語 (例: 理論値, TP 100)</label>
-                <input
-                  type="text"
-                  value={newMaxTerm}
-                  onChange={(e) => setNewMaxTerm(e.target.value)}
-                  className="w-full bg-zinc-900 border border-zinc-800 text-zinc-100 rounded px-3 py-2 focus:outline-none focus:border-zinc-600"
-                />
+                <label className="text-zinc-300 font-medium block mb-1">理論値 (MAX) 概念の有無</label>
+                <div className="flex items-center space-x-3 bg-zinc-900 border border-zinc-800 p-2 rounded">
+                  <label className="flex items-center space-x-1.5 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="hasMax"
+                      checked={newHasMax === true}
+                      onChange={() => setNewHasMax(true)}
+                    />
+                    <span>あり (Arcaea, maimai, CHUNITHM等)</span>
+                  </label>
+                  <label className="flex items-center space-x-1.5 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="hasMax"
+                      checked={newHasMax === false}
+                      onChange={() => setNewHasMax(false)}
+                    />
+                    <span>なし (プロセカ, バンドリ等)</span>
+                  </label>
+                </div>
               </div>
+
+              {newHasMax && (
+                <div>
+                  <label className="text-zinc-300 font-medium block mb-1">MAX/理論値相当の用語 (例: 理論値, TP 100)</label>
+                  <input
+                    type="text"
+                    value={newMaxTerm}
+                    onChange={(e) => setNewMaxTerm(e.target.value)}
+                    className="w-full bg-zinc-900 border border-zinc-800 text-zinc-100 rounded px-3 py-2 focus:outline-none focus:border-zinc-600"
+                  />
+                </div>
+              )}
 
               <div>
                 <label className="text-zinc-300 font-medium block mb-1">デバイス区分</label>

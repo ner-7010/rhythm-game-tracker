@@ -13,6 +13,7 @@ export const INITIAL_GAMES: GameTitle[] = [
     clearTerm: 'Track Complete',
     failedTerm: 'Track Lost',
     device: 'Mobile',
+    hasMaxConcept: true,
     maxMinusFormula: '10000000 + notes - score',
     gradeMasters: [
       { id: 'g0', name: '未プレイ', category: 'Unplayed' },

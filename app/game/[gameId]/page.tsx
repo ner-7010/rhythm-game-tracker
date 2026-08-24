@@ -11,7 +11,7 @@ import {
   getStoredCustomFields
 } from '@/lib/storage';
 import {
-  ArrowLeft, Search, Plus, FileEdit, CheckCircle2, X, Download, Upload, Trash2, Settings, PlusCircle, ArrowUp, ArrowDown, ArrowUpDown, Calculator, CircleDashed, Award, Zap, ShieldCheck
+  ArrowLeft, Search, Plus, FileEdit, CheckCircle2, X, Download, Upload, Trash2, Settings, PlusCircle, ArrowUp, ArrowDown, ArrowUpDown, Calculator, CircleDashed, ShieldAlert
 } from 'lucide-react';
 
 const parseCleanInt = (val: any): number => {
@@ -71,6 +71,7 @@ export default function GameDetailPage() {
     apTerm: 'Pure Memory',
     maxTerm: 'MAX / 理論値',
     device: 'Mobile' as const,
+    hasMaxConcept: true,
     maxMinusFormula: '10000000 + notes - score',
     gradeMasters: [
       { id: 'g0', name: '未プレイ', category: 'Unplayed' as const },
@@ -104,6 +105,8 @@ export default function GameDetailPage() {
     { id: 'd4', name: 'PST', order: 4 }
   ];
 
+  const hasMaxConcept = currentGame.hasMaxConcept !== false;
+
   const [search, setSearch] = useState('');
   const [apFilter, setApFilter] = useState<'All' | 'Unplayed' | 'Played' | 'AP' | 'MAX'>('All');
   const [sortBy, setSortBy] = useState<'default' | 'titleAsc' | 'diffHigh' | 'diffLow' | 'levelHigh' | 'scoreHigh'>('default');
@@ -127,6 +130,7 @@ export default function GameDetailPage() {
   const [editedGradeMasters, setEditedGradeMasters] = useState<GradeMasterItem[]>(gradeMasters);
   const [editedDiffMasters, setEditedDiffMasters] = useState<DifficultyMasterItem[]>(difficultyMasters);
   const [editedFormula, setEditedFormula] = useState<string>(currentGame.maxMinusFormula || '');
+  const [editedHasMax, setEditedHasMax] = useState<boolean>(hasMaxConcept);
 
   const [newGradeName, setNewGradeName] = useState('');
   const [newGradeCategory, setNewGradeCategory] = useState<GradeCategory>('AP');
@@ -136,6 +140,7 @@ export default function GameDetailPage() {
     if (currentGame.gradeMasters) setEditedGradeMasters(currentGame.gradeMasters);
     if (currentGame.difficultyMasters) setEditedDiffMasters(currentGame.difficultyMasters);
     setEditedFormula(currentGame.maxMinusFormula || '');
+    setEditedHasMax(currentGame.hasMaxConcept !== false);
   }, [currentGame]);
 
   // Auto-Calculate MAX-
@@ -308,7 +313,8 @@ export default function GameDetailPage() {
           ...g,
           gradeMasters: editedGradeMasters,
           difficultyMasters: editedDiffMasters,
-          maxMinusFormula: editedFormula
+          maxMinusFormula: editedFormula,
+          hasMaxConcept: editedHasMax
         };
       }
       return g;
@@ -441,7 +447,6 @@ export default function GameDetailPage() {
     return matchesSearch && matchesStatus;
   });
 
-  // Default Sort Order: 1. Song Title (Japanese / Alphabet) -> 2. Difficulty Master Order (BYD -> FTR -> PRS -> PST)
   const sortedRecords = [...filteredRecords].sort((a, b) => {
     if (sortBy === 'diffHigh') {
       const orderA = difficultyMasters.find(d => d.name === a.difficulty)?.order ?? 99;
@@ -460,7 +465,6 @@ export default function GameDetailPage() {
       return b.score - a.score;
     }
 
-    // Default & titleAsc: Sort by Song Title FIRST, then by Difficulty Master Order SECOND
     const titleCompare = a.songTitle.localeCompare(b.songTitle, 'ja', { numeric: true });
     if (titleCompare !== 0) return titleCompare;
 
@@ -486,7 +490,7 @@ export default function GameDetailPage() {
         </Link>
       </div>
 
-      {/* Game Header Banner with 4 Counts (Clear, FC, AP, MAX) */}
+      {/* Game Header Banner */}
       <div className="bg-[#121215] border border-zinc-800/80 p-5 rounded-lg flex flex-col lg:flex-row lg:items-center justify-between gap-4">
         <div>
           <div className="flex items-center space-x-2">
@@ -522,9 +526,18 @@ export default function GameDetailPage() {
             <span className="text-base font-bold text-emerald-400 num-tabular">{currentApCount.toLocaleString()}</span>
           </div>
 
-          <div className="bg-zinc-900 border border-zinc-800 px-3 py-1.5 rounded text-center min-w-[70px]">
+          {/* MAX / 理論値 Card (Greyed out if hasMaxConcept is false!) */}
+          <div className={`px-3 py-1.5 rounded text-center min-w-[70px] border transition ${
+            hasMaxConcept
+              ? 'bg-zinc-900 border-zinc-800'
+              : 'bg-zinc-950/60 border-zinc-900 opacity-50'
+          }`}>
             <span className="text-[10px] text-zinc-500 block truncate">{currentGame.maxTerm}</span>
-            <span className="text-base font-bold text-sky-400 num-tabular">{currentMaxCount.toLocaleString()}</span>
+            {hasMaxConcept ? (
+              <span className="text-base font-bold text-sky-400 num-tabular">{currentMaxCount.toLocaleString()}</span>
+            ) : (
+              <span className="text-xs font-semibold text-zinc-600 block mt-0.5" title="この機種には理論値(MAX)の概念が設定されていません">なし (-)</span>
+            )}
           </div>
 
           <button
@@ -553,7 +566,7 @@ export default function GameDetailPage() {
           </div>
 
           <div className="flex bg-zinc-900 border border-zinc-800 rounded p-0.5 text-xs">
-            {(['All', 'Played', 'Unplayed', 'AP', 'MAX'] as const).map(filter => (
+            {(['All', 'Played', 'Unplayed', 'AP', ...(hasMaxConcept ? ['MAX' as const] : [])] as const).map(filter => (
               <button
                 key={filter}
                 onClick={() => setApFilter(filter)}
@@ -618,7 +631,7 @@ export default function GameDetailPage() {
         </div>
       </div>
 
-      {/* Detailed Play Records Table (Pure Memory / AP Column REMOVED) */}
+      {/* Detailed Play Records Table */}
       <div className="bg-[#121215] border border-zinc-800/80 rounded-lg overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs border-collapse">
@@ -806,9 +819,11 @@ export default function GameDetailPage() {
                     onChange={(e) => setSelectedGradeName(e.target.value)}
                     className="w-full bg-zinc-900 border border-zinc-800 text-zinc-100 rounded px-3 py-2 focus:outline-none focus:border-zinc-600 font-semibold"
                   >
-                    {gradeMasters.map(g => (
-                      <option key={g.id} value={g.name}>{g.name} = [{g.category}]</option>
-                    ))}
+                    {gradeMasters
+                      .filter(g => hasMaxConcept || g.category !== 'MAX')
+                      .map(g => (
+                        <option key={g.id} value={g.name}>{g.name} = [{g.category}]</option>
+                      ))}
                   </select>
                 </div>
 
@@ -870,7 +885,7 @@ export default function GameDetailPage() {
         </div>
       )}
 
-      {/* Settings Modal */}
+      {/* Settings Modal (with hasMaxConcept toggle!) */}
       {isSettingsModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
           <div className="bg-[#121215] border border-zinc-700 w-full max-w-xl rounded-lg p-6 space-y-6 shadow-xl max-h-[90vh] overflow-y-auto">
@@ -879,6 +894,27 @@ export default function GameDetailPage() {
               <button onClick={() => setIsSettingsModalOpen(false)} className="text-zinc-500 hover:text-zinc-300">
                 <X className="w-4 h-4" />
               </button>
+            </div>
+
+            {/* Section 0: Has MAX Concept Toggle */}
+            <div className="space-y-2 bg-zinc-900/60 border border-zinc-800 p-3 rounded-lg">
+              <div className="flex items-center justify-between">
+                <div>
+                  <label className="text-xs font-bold text-zinc-200 block">理論値 (MAX) 概念の有無</label>
+                  <p className="text-[11px] text-zinc-400 mt-0.5">
+                    プロセカやバンドリのように「理論値(MAX)」という個別概念が存在しない機種はOFFに設定します。
+                  </p>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer flex-shrink-0 ml-3">
+                  <input
+                    type="checkbox"
+                    checked={editedHasMax}
+                    onChange={(e) => setEditedHasMax(e.target.checked)}
+                    className="sr-only peer"
+                  />
+                  <div className="w-9 h-5 bg-zinc-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-zinc-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-sky-600"></div>
+                </label>
+              </div>
             </div>
 
             {/* Section 1: Formula */}
