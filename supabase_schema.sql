@@ -66,26 +66,6 @@ CREATE POLICY "Auth Write Games" ON games FOR ALL TO authenticated USING (true) 
 CREATE POLICY "Auth Write Fields" ON custom_field_definitions FOR ALL TO authenticated USING (true) WITH CHECK (true);
 CREATE POLICY "Auth Write Records" ON play_records FOR ALL TO authenticated USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
 
--- 6. 初期データ登録 (全21機種の正確な初期値)
+-- 6. 初期データ登録 (Arcaeaのみを残したクリーン初期状態)
 INSERT INTO games (id, name, sheet_name, ap_count, max_count, ap_term, max_term, device, special_max_count, special_max_term) VALUES
-('arcaea', 'Arcaea', 'PM[Arcaea]', 1582, 822, 'Pure Memory', 'MAX / 理論値', 'Mobile', 0, NULL),
-('rotaeno', 'Rotaeno', 'AP[Rotaeno]', 712, 72, 'ALL PERFECT', 'ALL PERFECT+', 'Mobile', 0, NULL),
-('pjsekai', 'プロセカ', 'AP[プロセカ]', 451, 0, 'ALL PERFECT', '-', 'Mobile', 0, NULL),
-('paradigm', 'Paradigm: Reboot', 'AD[Paradigm: Reboot]', 305, 22, 'ALL DECRYPTED', 'MAX / 理論値', 'Mobile', 0, NULL),
-('hololive', 'hololive Dreams', 'AP[hololive Dreams]', 353, 0, 'ALL PERFECT', '-', 'Mobile', 0, NULL),
-('cytus2', 'Cytus II', 'MM[Cytus II]', 123, 67, 'Million Master', 'TP 100', 'Mobile', 0, 'MAX MASTER'),
-('chunithm', 'CHUNITHM', 'AJ[CHUNITHM]', 85, 0, 'ALL JUSTICE', 'ALL JUSTICE CRITICAL', 'Arcade', 0, NULL),
-('phigros', 'Phigros', 'Phi[Phigros]', 58, 0, 'Phi', '-', 'Mobile', 0, NULL),
-('ryceam', 'RYCEAM', 'AP[RYCEAM]', 57, 0, 'ALL PRECISE', '-', 'Mobile', 0, NULL),
-('takumi3', 'TAKUMI³', 'AJ[TAKUMI³]', 53, 14, 'ALL JUST', 'MAX / 理論値', 'Mobile', 0, NULL),
-('maimai', 'maimai', 'AP[maimai]', 49, 15, 'ALL PERFECT', 'ALL PERFECT+', 'Arcade', 0, 'でらっくスコア理論値'),
-('orzmic', 'Orzmic', 'PD[Orzmic]', 34, 10, 'PERFECT DECRYPTION', 'ORZ', 'Mobile', 0, NULL),
-('kalpa', 'KALPA', 'AP[KALPA]', 33, 0, 'ALL PERFECT', '-', 'Mobile', 0, NULL),
-('musicdiver', 'MUSIC DIVER', 'AP[MUSIC DIVER]', 26, 0, 'ALL PERFECT', 'ALL CRITICAL', 'Arcade', 0, NULL),
-('milthm', 'Milthm', 'AP[Milthm]', 23, 6, 'ALL PERFECT', 'RHYTHM of RAIN', 'Mobile', 0, NULL),
-('lanota', 'Lanota', 'PP[Lanota]', 19, 0, 'Perfect Purified', '-', 'Mobile', 0, NULL),
-('liminality', 'Liminality', 'L[Liminality]', 14, 0, 'Liminality', 'ALL HI-TECH+', 'Mobile', 0, NULL),
-('ongeki', 'オンゲキ', 'AB[オンゲキ]', 9, 0, 'ALL BREAK', 'テクニカルスコア理論値', 'Arcade', 0, 'P-スコア理論値'),
-('rizline', 'Rizline', 'AP[Rizline]', 7, 7, 'ALL PERFECT', 'MAX / 理論値', 'Mobile', 0, NULL),
-('ellia', 'ELLIA', 'X[ELLIA]', 6, 0, 'MAXX', '理論値', 'Mobile', 0, NULL),
-('deemo', 'DEEMO -Reborn-', 'AC[DEEMO -Reborn-]', 2, 0, 'ALL CHARMING', '-', 'Mobile', 0, NULL);
+('arcaea', 'Arcaea', 'PM[Arcaea]', 0, 0, 'Pure Memory', 'MAX / 理論値', 'Mobile', 0, NULL);
