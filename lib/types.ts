@@ -24,7 +24,7 @@ export interface GameTitle {
   clearTerm?: string;
   failedTerm?: string;
   device: 'Mobile' | 'Arcade';
-  hasMaxConcept?: boolean;                // 理論値(MAX)概念の有無 (デフォルト: true)
+  hasMaxConcept?: boolean;                // 理論値(MAX)概念の有無
   specialMaxCount?: number;
   specialMaxTerm?: string;
   maxMinusFormula?: string;
@@ -56,6 +56,7 @@ export interface PlayRecord {
   isFc: boolean;
   isClear: boolean;
   isMax: boolean;
+  isDeleted?: boolean;                    // 削除曲フラグ
   playedAt: string;
   customAttributes: Record<string, any>;
 }

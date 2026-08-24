@@ -36,9 +36,11 @@ export default function DashboardPage() {
     }
   }, []);
 
-  // Compute live game counts based on actual played records
+  // Compute live game counts based on active (non-deleted) played records
+  const activeRecords = records.filter(r => !r.isDeleted);
+
   const gamesWithLiveCounts = games.map(g => {
-    const gameRecs = records.filter(r => r.gameId === g.id && r.isPlayed);
+    const gameRecs = activeRecords.filter(r => r.gameId === g.id && r.isPlayed);
     const ap = gameRecs.filter(r => r.isAp).length;
     const max = gameRecs.filter(r => r.isMax).length;
     return {
@@ -48,7 +50,7 @@ export default function DashboardPage() {
     };
   });
 
-  const playedRecords = records.filter(r => r.isPlayed);
+  const playedRecords = activeRecords.filter(r => r.isPlayed);
   const totalClear = playedRecords.filter(r => r.isClear).length;
   const totalFc = playedRecords.filter(r => r.isFc).length;
   const totalAp = gamesWithLiveCounts.reduce((acc, g) => acc + g.apCount, 0);
@@ -120,7 +122,7 @@ export default function DashboardPage() {
     {
       date: '現在',
       ...games.reduce((acc, g) => {
-        const gPlayed = records.filter(r => r.gameId === g.id && r.isPlayed);
+        const gPlayed = activeRecords.filter(r => r.gameId === g.id && r.isPlayed);
         acc[`${g.id}_ap`] = gPlayed.filter(r => r.isAp).length;
         acc[`${g.id}_max`] = gPlayed.filter(r => r.isMax).length;
         return acc;

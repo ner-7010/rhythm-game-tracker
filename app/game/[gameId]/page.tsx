@@ -11,7 +11,7 @@ import {
   getStoredCustomFields
 } from '@/lib/storage';
 import {
-  ArrowLeft, Search, Plus, FileEdit, CheckCircle2, X, Download, Upload, Trash2, Settings, PlusCircle, ArrowUp, ArrowDown, ArrowUpDown, Calculator, CircleDashed, ShieldAlert
+  ArrowLeft, Search, Plus, FileEdit, CheckCircle2, X, Download, Upload, Trash2, Settings, PlusCircle, ArrowUp, ArrowDown, ArrowUpDown, Calculator, CircleDashed, ShieldAlert, ArchiveX
 } from 'lucide-react';
 
 const parseCleanInt = (val: any): number => {
@@ -28,7 +28,6 @@ const parseCleanFloat = (val: any): number | undefined => {
   return isNaN(num) ? undefined : num;
 };
 
-// Powerful Safe Math Formula Evaluator (Supports ROUND, FLOOR, CEIL, ABS, brackets, and arithmetic)
 const evaluateFormula = (formula: string, notesVal: number, scoreVal: number): number | undefined => {
   if (!formula || !formula.trim()) return undefined;
   try {
@@ -42,14 +41,12 @@ const evaluateFormula = (formula: string, notesVal: number, scoreVal: number): n
       .replace(/\bceil\b/g, 'Math.ceil')
       .replace(/\babs\b/g, 'Math.abs');
     
-    // Auto-fix missing closing parenthesis if any
     const openParenCount = (expr.match(/\(/g) || []).length;
     const closeParenCount = (expr.match(/\)/g) || []).length;
     if (openParenCount > closeParenCount) {
       expr += ')'.repeat(openParenCount - closeParenCount);
     }
 
-    // Safety validation: Allow numbers, Math functions, operators, and parentheses
     if (!/^[0-9\+\-\*\/\(\)\s\.\,Math\.round|Math\.floor|Math\.ceil|Math\.abs]+$/.test(expr)) {
       return undefined;
     }
@@ -68,6 +65,9 @@ export default function GameDetailPage() {
   const [games, setGames] = useState<GameTitle[]>([]);
   const [records, setRecords] = useState<PlayRecord[]>([]);
   const [customFields, setCustomFields] = useState<CustomFieldDefinition[]>([]);
+
+  // Include Deleted Songs in Stats Toggle
+  const [includeDeletedInStats, setIncludeDeletedInStats] = useState<boolean>(false);
 
   useEffect(() => {
     const loadedGames = getStoredGames();
@@ -125,7 +125,7 @@ export default function GameDetailPage() {
   const hasMaxConcept = currentGame.hasMaxConcept !== false;
 
   const [search, setSearch] = useState('');
-  const [apFilter, setApFilter] = useState<'All' | 'Unplayed' | 'Played' | 'AP' | 'MAX'>('All');
+  const [apFilter, setApFilter] = useState<'All' | 'Unplayed' | 'Played' | 'AP' | 'MAX' | 'Deleted'>('All');
   const [sortBy, setSortBy] = useState<'default' | 'titleAsc' | 'diffHigh' | 'diffLow' | 'levelHigh' | 'scoreHigh'>('default');
 
   // Record Modal State
@@ -140,6 +140,7 @@ export default function GameDetailPage() {
   const [score, setScore] = useState<string>('');
   const [selectedGradeName, setSelectedGradeName] = useState<string>(gradeMasters[0]?.name || '未プレイ');
   const [maxMinus, setMaxMinus] = useState<string>('');
+  const [isDeletedSong, setIsDeletedSong] = useState<boolean>(false);
   const [dynamicAttrs, setDynamicAttrs] = useState<Record<string, any>>({});
 
   // Settings Modal State
@@ -194,6 +195,7 @@ export default function GameDetailPage() {
     setScore('');
     setSelectedGradeName(gradeMasters[0]?.name || '未プレイ');
     setMaxMinus('');
+    setIsDeletedSong(false);
     setDynamicAttrs({});
     setIsRecordModalOpen(true);
   };
@@ -208,6 +210,7 @@ export default function GameDetailPage() {
     setScore(rec.score ? String(rec.score) : '');
     setSelectedGradeName(rec.grade || '未プレイ');
     setMaxMinus(rec.maxMinus !== undefined ? String(rec.maxMinus) : '');
+    setIsDeletedSong(rec.isDeleted === true);
     setDynamicAttrs(rec.customAttributes || {});
     setIsRecordModalOpen(true);
   };
@@ -275,6 +278,7 @@ export default function GameDetailPage() {
             grade: selectedGradeName,
             maxMinus: parsedMaxMinus,
             isPlayed, isAp, isFc, isClear, isMax,
+            isDeleted: isDeletedSong,
             customAttributes: dynamicAttrs
           };
         }
@@ -293,6 +297,7 @@ export default function GameDetailPage() {
         grade: selectedGradeName,
         maxMinus: parsedMaxMinus,
         isPlayed, isAp, isFc, isClear, isMax,
+        isDeleted: isDeletedSong,
         playedAt: new Date().toISOString(),
         customAttributes: dynamicAttrs
       };
@@ -342,7 +347,7 @@ export default function GameDetailPage() {
     setIsSettingsModalOpen(false);
   };
 
-  // Export CSV
+  // Export CSV (Includes Deleted flag column)
   const handleExportSongsCsv = () => {
     const currentGameRecords = records.filter(r => r.gameId === gameId);
     const exportData = currentGameRecords.map(r => ({
@@ -355,6 +360,7 @@ export default function GameDetailPage() {
       'Score (スコア)': r.score || '',
       'Grade (ランク)': r.grade || '未プレイ',
       'MAX- (失点)': r.maxMinus !== undefined ? `-${r.maxMinus}` : '',
+      'Deleted (削除曲)': r.isDeleted ? 'TRUE' : 'FALSE',
       'Composer (コンポーザー)': r.customAttributes?.['コンポーザー'] || r.customAttributes?.composer || '',
       'BPM': r.customAttributes?.['BPM'] || r.customAttributes?.bpm || '',
       '譜面制作者': r.customAttributes?.['譜面制作者'] || r.customAttributes?.notesDesigner || ''
@@ -371,6 +377,7 @@ export default function GameDetailPage() {
         'Score (スコア)': '',
         'Grade (ランク)': '未プレイ',
         'MAX- (失点)': '',
+        'Deleted (削除曲)': 'FALSE',
         'Composer (コンポーザー)': '作曲者名',
         'BPM': '200',
         '譜面制作者': '譜面制作者名'
@@ -388,7 +395,7 @@ export default function GameDetailPage() {
     document.body.removeChild(link);
   };
 
-  // Import CSV
+  // Import CSV (Parses Deleted flag column)
   const handleImportSongsCsv = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -403,6 +410,7 @@ export default function GameDetailPage() {
           const title = String(row['Song Title (曲名)'] || row['title'] || row['曲名'] || '無題').trim();
           const diff = String(row['Difficulty (難易度)'] || row['difficulty'] || difficultyMasters[0]?.name || 'MASTER').trim();
           const gName = String(row['Grade (ランク)'] || row['grade'] || (row['Score (スコア)'] ? 'Pure Memory' : '未プレイ')).trim();
+          const isDel = String(row['Deleted (削除曲)'] || row['is_deleted'] || 'FALSE').toUpperCase() === 'TRUE';
           
           const { isPlayed, isMax, isAp, isFc, isClear } = calculateFlagsFromGrade(gName);
 
@@ -433,6 +441,7 @@ export default function GameDetailPage() {
             grade: gName,
             maxMinus: computedMaxMinus,
             isPlayed, isAp, isFc, isClear, isMax,
+            isDeleted: isDel,
             playedAt: new Date().toISOString(),
             customAttributes: {
               'コンポーザー': row['Composer (コンポーザー)'] || row['composer'],
@@ -460,6 +469,7 @@ export default function GameDetailPage() {
     if (apFilter === 'Played') matchesStatus = r.isPlayed;
     if (apFilter === 'AP') matchesStatus = r.isAp;
     if (apFilter === 'MAX') matchesStatus = r.isMax;
+    if (apFilter === 'Deleted') matchesStatus = r.isDeleted === true;
 
     return matchesSearch && matchesStatus;
   });
@@ -490,12 +500,18 @@ export default function GameDetailPage() {
     return orderA - orderB;
   });
 
-  const playedRecords = currentGameRecords.filter(r => r.isPlayed);
-  const unplayedRecords = currentGameRecords.filter(r => !r.isPlayed);
+  // Calculate Stat Counts with Option to Include or Exclude Deleted Songs
+  const statsRecords = includeDeletedInStats
+    ? currentGameRecords
+    : currentGameRecords.filter(r => !r.isDeleted);
+
+  const playedRecords = statsRecords.filter(r => r.isPlayed);
+  const unplayedRecords = statsRecords.filter(r => !r.isPlayed);
   const currentMaxCount = playedRecords.filter(r => r.isMax).length;
   const currentApCount = playedRecords.filter(r => r.isAp).length;
   const currentFcCount = playedRecords.filter(r => r.isFc).length;
   const currentClearCount = playedRecords.filter(r => r.isClear).length;
+  const totalDeletedCount = currentGameRecords.filter(r => r.isDeleted).length;
 
   return (
     <div className="space-y-6">
@@ -520,7 +536,12 @@ export default function GameDetailPage() {
             既プレイ曲数: <span className="font-mono text-zinc-200 font-bold">{playedRecords.length} 曲</span>
             {unplayedRecords.length > 0 && (
               <span className="ml-2 text-zinc-500">
-                (未プレイ枠: <span className="font-mono text-zinc-400">{unplayedRecords.length} 曲</span> / 全{currentGameRecords.length}枠)
+                (未プレイ枠: <span className="font-mono text-zinc-400">{unplayedRecords.length} 曲</span> / 全{statsRecords.length}枠)
+              </span>
+            )}
+            {totalDeletedCount > 0 && (
+              <span className="ml-2 text-rose-400/80 font-medium">
+                [削除曲: {totalDeletedCount}曲 {includeDeletedInStats ? '統計に包含中' : '統計から除外中'}]
               </span>
             )}
           </p>
@@ -567,10 +588,10 @@ export default function GameDetailPage() {
         </div>
       </div>
 
-      {/* Table Toolbar / Controls */}
+      {/* Table Toolbar / Controls (Includes Deleted Stats Toggle Switch!) */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-[#121215] border border-zinc-800/80 p-4 rounded-lg">
-        <div className="flex items-center space-x-2 flex-1">
-          <div className="relative flex-1 max-w-xs">
+        <div className="flex flex-wrap items-center space-x-2 flex-1 gap-y-2">
+          <div className="relative flex-1 min-w-[140px] max-w-xs">
             <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
             <input
               type="text"
@@ -582,7 +603,7 @@ export default function GameDetailPage() {
           </div>
 
           <div className="flex bg-zinc-900 border border-zinc-800 rounded p-0.5 text-xs">
-            {(['All', 'Played', 'Unplayed', 'AP', ...(hasMaxConcept ? ['MAX' as const] : [])] as const).map(filter => (
+            {(['All', 'Played', 'Unplayed', 'AP', ...(hasMaxConcept ? ['MAX' as const] : []), 'Deleted'] as const).map(filter => (
               <button
                 key={filter}
                 onClick={() => setApFilter(filter)}
@@ -590,9 +611,23 @@ export default function GameDetailPage() {
                   apFilter === filter ? 'bg-zinc-800 text-zinc-100 font-medium' : 'text-zinc-400 hover:text-zinc-200'
                 }`}
               >
-                {filter === 'All' ? '全枠' : filter === 'Played' ? 'プレイ済' : filter === 'Unplayed' ? '未プレイ' : filter === 'AP' ? currentGame.apTerm : currentGame.maxTerm}
+                {filter === 'All' ? '全枠' : filter === 'Played' ? 'プレイ済' : filter === 'Unplayed' ? '未プレイ' : filter === 'AP' ? currentGame.apTerm : filter === 'MAX' ? currentGame.maxTerm : '削除曲のみ'}
               </button>
             ))}
+          </div>
+
+          {/* Toggle: Include Deleted Songs in Stats */}
+          <div className="flex items-center space-x-2 bg-zinc-900 border border-zinc-800 rounded px-2.5 py-1 text-xs">
+            <label className="relative inline-flex items-center cursor-pointer">
+              <input
+                type="checkbox"
+                checked={includeDeletedInStats}
+                onChange={(e) => setIncludeDeletedInStats(e.target.checked)}
+                className="sr-only peer"
+              />
+              <div className="w-7 h-4 bg-zinc-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-zinc-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-rose-600"></div>
+            </label>
+            <span className="text-zinc-300 text-[11px]">削除曲を統計に含める</span>
           </div>
 
           <div className="flex items-center space-x-1 bg-zinc-900 border border-zinc-800 rounded px-2 py-1 text-xs">
@@ -675,7 +710,11 @@ export default function GameDetailPage() {
                 </tr>
               ) : (
                 sortedRecords.map((rec, index) => (
-                  <tr key={rec.id} className={`transition-colors ${!rec.isPlayed ? 'bg-zinc-950/40 text-zinc-500' : 'hover:bg-zinc-900/40'}`}>
+                  <tr key={rec.id} className={`transition-colors ${
+                    rec.isDeleted
+                      ? 'bg-rose-950/20 text-zinc-400 hover:bg-rose-900/20'
+                      : !rec.isPlayed ? 'bg-zinc-950/40 text-zinc-500' : 'hover:bg-zinc-900/40'
+                  }`}>
                     <td className="py-3 px-4 font-mono text-zinc-500 num-tabular align-middle">{index + 1}</td>
                     <td className="py-3 px-4 font-bold text-zinc-100 align-middle">
                       <div className="flex items-center gap-1.5 h-full">
@@ -684,7 +723,14 @@ export default function GameDetailPage() {
                             <CircleDashed className="w-3.5 h-3.5 text-zinc-600" />
                           </span>
                         )}
-                        <span className="leading-tight">{rec.songTitle}</span>
+                        <span className={`leading-tight ${rec.isDeleted ? 'line-through text-zinc-400' : ''}`}>
+                          {rec.songTitle}
+                        </span>
+                        {rec.isDeleted && (
+                          <span className="px-1.5 py-0.2 rounded text-[9px] font-medium bg-rose-950 text-rose-400 border border-rose-800 flex-shrink-0 flex items-center gap-0.5">
+                            <ArchiveX className="w-3 h-3" /> 削除曲
+                          </span>
+                        )}
                       </div>
                     </td>
                     <td className="py-3 px-3 align-middle">
@@ -718,7 +764,7 @@ export default function GameDetailPage() {
                         <button
                           onClick={() => handleOpenEditModal(rec)}
                           className="text-zinc-400 hover:text-zinc-100 p-1 transition"
-                          title="編集 (スコア入力)"
+                          title="編集 (スコア入力 / 削除曲設定)"
                         >
                           <FileEdit className="w-3.5 h-3.5" />
                         </button>
@@ -739,7 +785,7 @@ export default function GameDetailPage() {
         </div>
       </div>
 
-      {/* Record Modal */}
+      {/* Record Modal (with Deleted Song Checkbox!) */}
       {isRecordModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
           <div className="bg-[#121215] border border-zinc-700 w-full max-w-lg rounded-lg p-6 space-y-4 shadow-xl max-h-[90vh] overflow-y-auto">
@@ -762,6 +808,20 @@ export default function GameDetailPage() {
                   onChange={(e) => setSongTitle(e.target.value)}
                   className="w-full bg-zinc-900 border border-zinc-800 text-zinc-100 rounded px-3 py-2 focus:outline-none focus:border-zinc-600"
                   required
+                />
+              </div>
+
+              {/* Deleted Song Flag Checkbox */}
+              <div className="bg-zinc-900/60 border border-zinc-800 p-2.5 rounded flex items-center justify-between">
+                <div>
+                  <label className="text-xs font-semibold text-rose-300 block">削除曲フラグ</label>
+                  <p className="text-[10px] text-zinc-400">アプデ等で削除・プレイ不可となった楽曲の場合にチェックを入れます。</p>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={isDeletedSong}
+                  onChange={(e) => setIsDeletedSong(e.target.checked)}
+                  className="w-4 h-4 accent-rose-600 rounded cursor-pointer"
                 />
               </div>
 
