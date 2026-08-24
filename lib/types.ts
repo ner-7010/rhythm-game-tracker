@@ -1,3 +1,17 @@
+export type GradeCategory = 'MAX' | 'AP' | 'FC' | 'Clear' | 'Failed';
+
+export interface GradeMasterItem {
+  id: string;
+  name: string; // 例: "Pure Memory", "Track Complete"
+  category: GradeCategory; // MAX / AP / FC / Clear / Failed
+}
+
+export interface DifficultyMasterItem {
+  id: string;
+  name: string; // 例: "BYD", "FTR", "PRS", "PST"
+  order: number; // 並び順 (数値が小さいほど高難易度)
+}
+
 export interface GameTitle {
   id: string;
   name: string;
@@ -6,13 +20,14 @@ export interface GameTitle {
   maxCount: number;
   apTerm: string;
   maxTerm: string;
-  fcTerm?: string;       // 例: Full Recall, ALL JUSTICE...
-  clearTerm?: string;    // 例: Track Complete, Clear...
-  failedTerm?: string;   // 例: Track Lost, Failed...
+  fcTerm?: string;
+  clearTerm?: string;
+  failedTerm?: string;
   device: 'Mobile' | 'Arcade';
   specialMaxCount?: number;
   specialMaxTerm?: string;
-  grades?: string[];     // 機種ごとのランクマスター (例: ["理論値", "Pure Memory", "Full Recall", "Track Complete", "Track Lost"])
+  gradeMasters?: GradeMasterItem[];       // Gradeマッピングマスター
+  difficultyMasters?: DifficultyMasterItem[]; // 難易度順序マスター
   customFields?: CustomFieldDefinition[];
 }
 
@@ -39,7 +54,7 @@ export interface PlayRecord {
   isClear: boolean;
   isMax: boolean;
   playedAt: string;
-  customAttributes: Record<string, any>; // BPM, 譜面制作者など動的項目
+  customAttributes: Record<string, any>;
 }
 
 export interface GrowthHistoryPoint {

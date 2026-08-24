@@ -13,12 +13,18 @@ export const INITIAL_GAMES: GameTitle[] = [
     clearTerm: 'Track Complete',
     failedTerm: 'Track Lost',
     device: 'Mobile',
-    grades: [
-      'Pure Memory (理論値)',
-      'Pure Memory',
-      'Full Recall',
-      'Track Complete',
-      'Track Lost'
+    gradeMasters: [
+      { id: 'g1', name: 'Pure Memory (理論値)', category: 'MAX' },
+      { id: 'g2', name: 'Pure Memory', category: 'AP' },
+      { id: 'g3', name: 'Full Recall', category: 'FC' },
+      { id: 'g4', name: 'Track Complete', category: 'Clear' },
+      { id: 'g5', name: 'Track Lost', category: 'Failed' }
+    ],
+    difficultyMasters: [
+      { id: 'd1', name: 'BYD', order: 1 },
+      { id: 'd2', name: 'FTR', order: 2 },
+      { id: 'd3', name: 'PRS', order: 3 },
+      { id: 'd4', name: 'PST', order: 4 }
     ]
   }
 ];

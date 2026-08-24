@@ -66,7 +66,19 @@ export default function DashboardPage() {
       apTerm: newApTerm || 'AP',
       maxTerm: newMaxTerm || 'MAX',
       device: newDevice,
-      grades: [newMaxTerm, newApTerm, 'Full Combo', 'Clear', 'Failed']
+      gradeMasters: [
+        { id: 'g1', name: newMaxTerm || '理論値', category: 'MAX' },
+        { id: 'g2', name: newApTerm || 'AP', category: 'AP' },
+        { id: 'g3', name: 'Full Combo', category: 'FC' },
+        { id: 'g4', name: 'Clear', category: 'Clear' },
+        { id: 'g5', name: 'Failed', category: 'Failed' }
+      ],
+      difficultyMasters: [
+        { id: 'd1', name: 'MASTER', order: 1 },
+        { id: 'd2', name: 'EXPERT', order: 2 },
+        { id: 'd3', name: 'ADVANCED', order: 3 },
+        { id: 'd4', name: 'BASIC', order: 4 }
+      ]
     };
 
     const updated = [...games, newGame];
