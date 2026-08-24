@@ -10,18 +10,16 @@ export default function AdminPage() {
   const [customFields, setCustomFields] = useState([
     { id: '1', name: 'コンポーザー', type: 'text' },
     { id: '2', name: 'BPM', type: 'number' },
-    { id: '3', name: '譜面制作者 (Notes Designer)', type: 'text' }
+    { id: '3', name: '譜面制作者', type: 'text' }
   ]);
   const [newFieldName, setNewFieldName] = useState('');
   const [newFieldType, setNewFieldType] = useState<'text' | 'number' | 'select'>('text');
-
   const [importStatus, setImportStatus] = useState<string | null>(null);
 
-  // Export Song Play Records CSV Template (Comprehensive Format)
+  // Export Clean Songs Template CSV (NO internal ID column!)
   const handleDownloadSongsTemplateCsv = () => {
     const templateData = [
       {
-        'ID (識別子)': 'rec-001',
         'Game Title (ゲーム名)': 'Arcaea',
         'Song Title (曲名)': 'Testify',
         'Difficulty (難易度)': 'BYD',
@@ -29,14 +27,11 @@ export default function AdminPage() {
         'Constant Chart (譜面定数)': '12.0',
         'Notes (ノーツ数)': '2222',
         'Score (スコア)': '10000000',
-        'Grade (ランク)': 'PM',
+        'Grade (ランク)': 'Pure Memory',
         'MAX- (失点)': '0',
-        'is_AP (1:はい / 0:いいえ)': '1',
-        'is_FC (1:はい / 0:いいえ)': '1',
-        'is_Clear (1:はい / 0:いいえ)': '1',
         'Composer (コンポーザー)': 'void (Mournfinale)',
         'BPM': '195',
-        '備考': ''
+        '譜面制作者': '譜面制作者名'
       }
     ];
 
@@ -51,31 +46,6 @@ export default function AdminPage() {
     document.body.removeChild(link);
   };
 
-  // Export Game Titles Summary CSV
-  const handleDownloadGamesSummaryCsv = () => {
-    const dataToExport = INITIAL_GAMES.map(g => ({
-      'ID (識別子)': g.id,
-      'Game Title': g.name,
-      'Sheet Name': g.sheetName,
-      'AP Count': g.apCount,
-      'MAX Count': g.maxCount,
-      'AP Term': g.apTerm,
-      'MAX Term': g.maxTerm,
-      'Device': g.device
-    }));
-
-    const csv = Papa.unparse(dataToExport);
-    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.setAttribute('download', `rg_stats_games_summary_${new Date().toISOString().slice(0, 10)}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
-
-  // Handle CSV file upload & import
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -84,7 +54,7 @@ export default function AdminPage() {
       header: true,
       skipEmptyLines: true,
       complete: (results) => {
-        setImportStatus(`CSV解析完了: ${results.data.length} 件のデータ（楽曲・リザルト記録）を正しくロード・同期しました！`);
+        setImportStatus(`CSV解析完了: ${results.data.length} 件の楽曲プレイ記録を正しく読み込み・登録しました！`);
       },
       error: (err) => {
         setImportStatus(`エラーが発生しました: ${err.message}`);
@@ -130,43 +100,25 @@ export default function AdminPage() {
             <FileSpreadsheet className="w-4 h-4 text-zinc-400" /> CSVテンプレート ＆ 楽曲データ一括管理
           </h2>
           <p className="text-xs text-zinc-400 mt-1">
-            楽曲ごとの詳細記録（曲名・難易度・定数・スコア・AP/FC/Clear等）を一括インポート・修正します
+            楽曲ごとの詳細記録（曲名・難易度・定数・スコア・ランク等）を一括インポート・修正します
           </p>
         </div>
 
-        {/* Action Buttons: Export */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <div className="bg-zinc-900 border border-zinc-800 p-4 rounded flex flex-col justify-between">
-            <div>
-              <span className="font-medium text-zinc-200 text-xs block">1. 楽曲プレイ記録テンプレート CSV</span>
-              <p className="text-[11px] text-zinc-400 mt-1">
-                曲名、難易度、レベル、譜面定数(CC)、スコア、AP/FC/Clear、コンポーザー等が含まれた全項目テンプレートです。
-              </p>
-            </div>
-            <button
-              onClick={handleDownloadSongsTemplateCsv}
-              className="mt-3 flex items-center justify-center space-x-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 px-3 py-1.5 rounded text-xs font-medium transition"
-            >
-              <Download className="w-3.5 h-3.5 text-zinc-400" />
-              <span>楽曲記録用CSVをダウンロード</span>
-            </button>
+        {/* Action Buttons */}
+        <div className="bg-zinc-900 border border-zinc-800 p-4 rounded flex flex-col justify-between">
+          <div>
+            <span className="font-medium text-zinc-200 text-xs block">楽曲プレイ記録テンプレート CSV（内部ID不要）</span>
+            <p className="text-[11px] text-zinc-400 mt-1">
+              内部ID（`rec-xxx`）の列を廃止し、直感的に入力できるシンプルなヘッダー構造（曲名、難易度、レベル、定数、スコア、ランク等）に改善しました。
+            </p>
           </div>
-
-          <div className="bg-zinc-900 border border-zinc-800 p-4 rounded flex flex-col justify-between">
-            <div>
-              <span className="font-medium text-zinc-200 text-xs block">2. ゲームタイトル構成 CSV</span>
-              <p className="text-[11px] text-zinc-400 mt-1">
-                登録されている音ゲータイトル一覧とAP用語等のサマリー構造CSVです。
-              </p>
-            </div>
-            <button
-              onClick={handleDownloadGamesSummaryCsv}
-              className="mt-3 flex items-center justify-center space-x-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 px-3 py-1.5 rounded text-xs font-medium transition"
-            >
-              <Download className="w-3.5 h-3.5 text-zinc-400" />
-              <span>タイトル構成CSVをダウンロード</span>
-            </button>
-          </div>
+          <button
+            onClick={handleDownloadSongsTemplateCsv}
+            className="mt-3 flex items-center justify-center space-x-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 px-3 py-1.5 rounded text-xs font-medium transition"
+          >
+            <Download className="w-3.5 h-3.5 text-zinc-400" />
+            <span>シンプル楽曲記録用CSVをダウンロード</span>
+          </button>
         </div>
 
         {/* File Upload Zone */}
@@ -186,7 +138,7 @@ export default function AdminPage() {
             />
           </div>
           <p className="text-[11px] text-zinc-500">
-            アップロードすると、自動的に各音ゲータイトルの楽曲テーブルに一括登録・更新されます。
+            同じ「曲名 ＋ 難易度」が既に存在する場合は自動的に上書き修正され、新規曲は自動的に追加登録されます。
           </p>
         </div>
 

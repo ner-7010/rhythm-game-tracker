@@ -115,17 +115,15 @@ export default function GameDetailPage() {
 
   const [newGradeName, setNewGradeName] = useState('');
   const [newGradeCategory, setNewGradeCategory] = useState<GradeCategory>('AP');
-
   const [newDiffName, setNewDiffName] = useState('');
 
-  // Sync settings when game changes
   useEffect(() => {
     if (currentGame.gradeMasters) setEditedGradeMasters(currentGame.gradeMasters);
     if (currentGame.difficultyMasters) setEditedDiffMasters(currentGame.difficultyMasters);
     setEditedFormula(currentGame.maxMinusFormula || '');
   }, [currentGame]);
 
-  // Auto-Calculate MAX- when score or notes change!
+  // Auto-Calculate MAX-
   const autoCalculateMaxMinus = (newScoreStr: string, newNotesStr: string) => {
     const formula = currentGame.maxMinusFormula;
     if (!formula) return;
@@ -149,7 +147,6 @@ export default function GameDetailPage() {
     autoCalculateMaxMinus(score, val);
   };
 
-  // Open modal for NEW record
   const handleOpenAddModal = () => {
     setEditingRecordId(null);
     setSongTitle('');
@@ -164,7 +161,6 @@ export default function GameDetailPage() {
     setIsRecordModalOpen(true);
   };
 
-  // Open modal for EDITING record
   const handleOpenEditModal = (rec: PlayRecord) => {
     setEditingRecordId(rec.id);
     setSongTitle(rec.songTitle);
@@ -179,7 +175,6 @@ export default function GameDetailPage() {
     setIsRecordModalOpen(true);
   };
 
-  // Compute AP/FC/Clear/MAX flags automatically based on Selected Grade Master
   const calculateFlagsFromGrade = (gradeName: string) => {
     const matchedGrade = gradeMasters.find(g => g.name === gradeName);
     const category = matchedGrade ? matchedGrade.category : 'AP';
@@ -190,42 +185,25 @@ export default function GameDetailPage() {
     let isClear = false;
 
     if (category === 'MAX') {
-      isMax = true;
-      isAp = true;
-      isFc = true;
-      isClear = true;
+      isMax = true; isAp = true; isFc = true; isClear = true;
     } else if (category === 'AP') {
-      isMax = false;
-      isAp = true;
-      isFc = true;
-      isClear = true;
+      isMax = false; isAp = true; isFc = true; isClear = true;
     } else if (category === 'FC') {
-      isMax = false;
-      isAp = false;
-      isFc = true;
-      isClear = true;
+      isMax = false; isAp = false; isFc = true; isClear = true;
     } else if (category === 'Clear') {
-      isMax = false;
-      isAp = false;
-      isFc = false;
-      isClear = true;
+      isMax = false; isAp = false; isFc = false; isClear = true;
     } else {
-      isMax = false;
-      isAp = false;
-      isFc = false;
-      isClear = false;
+      isMax = false; isAp = false; isFc = false; isClear = false;
     }
 
     return { isMax, isAp, isFc, isClear };
   };
 
-  // Save Record
   const handleSaveRecord = (e: React.FormEvent) => {
     e.preventDefault();
     if (!songTitle.trim()) return;
 
     const { isMax, isAp, isFc, isClear } = calculateFlagsFromGrade(selectedGradeName);
-
     let updatedRecords: PlayRecord[];
 
     if (editingRecordId) {
@@ -241,10 +219,7 @@ export default function GameDetailPage() {
             score: score !== '' ? parseInt(score, 10) : 0,
             grade: selectedGradeName,
             maxMinus: maxMinus !== '' ? parseInt(maxMinus, 10) : undefined,
-            isAp,
-            isFc,
-            isClear,
-            isMax,
+            isAp, isFc, isClear, isMax,
             customAttributes: dynamicAttrs
           };
         }
@@ -262,10 +237,7 @@ export default function GameDetailPage() {
         score: score !== '' ? parseInt(score, 10) : 0,
         grade: selectedGradeName,
         maxMinus: maxMinus !== '' ? parseInt(maxMinus, 10) : undefined,
-        isAp,
-        isFc,
-        isClear,
-        isMax,
+        isAp, isFc, isClear, isMax,
         playedAt: new Date().toISOString(),
         customAttributes: dynamicAttrs
       };
@@ -277,14 +249,12 @@ export default function GameDetailPage() {
     setIsRecordModalOpen(false);
   };
 
-  // Delete Record
   const handleDeleteRecord = (id: string) => {
     const updated = records.filter(r => r.id !== id);
     setRecords(updated);
     saveStoredRecords(updated);
   };
 
-  // Move Difficulty Order Up/Down
   const handleMoveDiffOrder = (index: number, direction: 'up' | 'down') => {
     const newItems = [...editedDiffMasters];
     const targetIndex = direction === 'up' ? index - 1 : index + 1;
@@ -298,7 +268,6 @@ export default function GameDetailPage() {
     setEditedDiffMasters(reordered);
   };
 
-  // Save Settings
   const handleSaveGameSettings = () => {
     const updatedGames = games.map(g => {
       if (g.id === gameId) {
@@ -317,11 +286,10 @@ export default function GameDetailPage() {
     setIsSettingsModalOpen(false);
   };
 
-  // Export CSV
+  // Export CSV (WITHOUT internal ID column!)
   const handleExportSongsCsv = () => {
     const currentGameRecords = records.filter(r => r.gameId === gameId);
     const exportData = currentGameRecords.map(r => ({
-      'ID (識別子)': r.id,
       'Game Title': currentGame.name,
       'Song Title (曲名)': r.songTitle,
       'Difficulty (難易度)': r.difficulty,
@@ -338,7 +306,6 @@ export default function GameDetailPage() {
 
     if (exportData.length === 0) {
       exportData.push({
-        'ID (識別子)': '',
         'Game Title': currentGame.name,
         'Song Title (曲名)': 'サンプル曲',
         'Difficulty (難易度)': difficultyMasters[0]?.name || 'MASTER',
@@ -365,7 +332,7 @@ export default function GameDetailPage() {
     document.body.removeChild(link);
   };
 
-  // Import CSV
+  // Import CSV (WITHOUT requiring internal ID, matches by Song Title + Difficulty!)
   const handleImportSongsCsv = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -374,7 +341,13 @@ export default function GameDetailPage() {
       header: true,
       skipEmptyLines: true,
       complete: (results) => {
-        const importedRecords: PlayRecord[] = results.data.map((row: any, idx: number) => {
+        let currentRecordList = [...records];
+
+        results.data.forEach((row: any, idx: number) => {
+          const title = row['Song Title (曲名)'] || row['title'] || row['曲名'];
+          if (!title) return;
+
+          const diff = row['Difficulty (難易度)'] || row['difficulty'] || difficultyMasters[0]?.name || 'MASTER';
           const gName = row['Grade (ランク)'] || gradeMasters[0]?.name || 'Pure Memory';
           const { isMax, isAp, isFc, isClear } = calculateFlagsFromGrade(gName);
 
@@ -388,21 +361,23 @@ export default function GameDetailPage() {
             computedMaxMinus = evaluateFormula(currentGame.maxMinusFormula, notesVal, scoreVal);
           }
 
-          return {
-            id: row['ID (識別子)'] || `imp-${Date.now()}-${idx}`,
+          // Check if record for same song + difficulty already exists for updating
+          const existingIndex = currentRecordList.findIndex(
+            r => r.gameId === gameId && r.songTitle === title && r.difficulty === diff
+          );
+
+          const updatedRec: PlayRecord = {
+            id: existingIndex >= 0 ? currentRecordList[existingIndex].id : `imp-${Date.now()}-${idx}`,
             gameId,
-            songTitle: row['Song Title (曲名)'] || row['title'] || row['曲名'] || '無題',
-            difficulty: row['Difficulty (難易度)'] || row['difficulty'] || difficultyMasters[0]?.name || 'MASTER',
+            songTitle: title,
+            difficulty: diff,
             level: String(row['Level (レベル)'] || row['level'] || '12'),
             constantChart: row['Constant Chart (譜面定数)'] ? parseFloat(row['Constant Chart (譜面定数)']) : undefined,
             notes: notesVal,
             score: scoreVal,
             grade: gName,
             maxMinus: computedMaxMinus,
-            isAp,
-            isFc,
-            isClear,
-            isMax,
+            isAp, isFc, isClear, isMax,
             playedAt: new Date().toISOString(),
             customAttributes: {
               'コンポーザー': row['Composer (コンポーザー)'] || row['composer'],
@@ -410,16 +385,20 @@ export default function GameDetailPage() {
               '譜面制作者': row['譜面制作者']
             }
           };
+
+          if (existingIndex >= 0) {
+            currentRecordList[existingIndex] = updatedRec;
+          } else {
+            currentRecordList.unshift(updatedRec);
+          }
         });
 
-        const newRecords = [...importedRecords, ...records];
-        setRecords(newRecords);
-        saveStoredRecords(newRecords);
+        setRecords(currentRecordList);
+        saveStoredRecords(currentRecordList);
       }
     });
   };
 
-  // Filter & Sort records
   const currentGameRecords = records.filter(r => r.gameId === gameId);
 
   const filteredRecords = currentGameRecords.filter(r => {
@@ -494,7 +473,7 @@ export default function GameDetailPage() {
 
           <button
             onClick={() => setIsSettingsModalOpen(true)}
-            title="Gradeマッピング, 難易度マスター & MAX-計算式設定"
+            title="機種マスター設定"
             className="flex items-center space-x-1 bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-800 px-3 py-2 rounded text-xs transition"
           >
             <Settings className="w-3.5 h-3.5 text-zinc-400" />
@@ -517,7 +496,6 @@ export default function GameDetailPage() {
             />
           </div>
 
-          {/* Sort Selector */}
           <div className="flex items-center space-x-1 bg-zinc-900 border border-zinc-800 rounded px-2 py-1 text-xs">
             <ArrowUpDown className="w-3.5 h-3.5 text-zinc-500" />
             <select
@@ -534,11 +512,10 @@ export default function GameDetailPage() {
           </div>
         </div>
 
-        {/* Action Buttons */}
         <div className="flex items-center space-x-2">
           <button
             onClick={handleExportSongsCsv}
-            title="CSVエクスポート"
+            title="CSV出力"
             className="flex items-center space-x-1 bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-800 px-2.5 py-1.5 rounded text-xs font-medium transition"
           >
             <Download className="w-3.5 h-3.5 text-zinc-400" />
@@ -547,7 +524,7 @@ export default function GameDetailPage() {
 
           <label
             htmlFor="song-csv-import"
-            title="CSVインポート"
+            title="CSV取込"
             className="flex items-center space-x-1 bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-800 px-2.5 py-1.5 rounded text-xs font-medium cursor-pointer transition"
           >
             <Upload className="w-3.5 h-3.5 text-zinc-400" />
@@ -656,7 +633,7 @@ export default function GameDetailPage() {
         </div>
       </div>
 
-      {/* Modal for ADDING / EDITING record */}
+      {/* Record Modal */}
       {isRecordModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
           <div className="bg-[#121215] border border-zinc-700 w-full max-w-lg rounded-lg p-6 space-y-4 shadow-xl max-h-[90vh] overflow-y-auto">
@@ -746,7 +723,7 @@ export default function GameDetailPage() {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-zinc-300 font-medium block mb-1">Grade / ランク (全自動判定)</label>
+                  <label className="text-zinc-300 font-medium block mb-1">Grade / ランク (自動全判定)</label>
                   <select
                     value={selectedGradeName}
                     onChange={(e) => setSelectedGradeName(e.target.value)}
@@ -816,7 +793,7 @@ export default function GameDetailPage() {
         </div>
       )}
 
-      {/* Modal for Game Master Settings (Grade Mappings, Difficulty Order & Formula) */}
+      {/* Settings Modal */}
       {isSettingsModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
           <div className="bg-[#121215] border border-zinc-700 w-full max-w-xl rounded-lg p-6 space-y-6 shadow-xl max-h-[90vh] overflow-y-auto">
@@ -827,25 +804,22 @@ export default function GameDetailPage() {
               </button>
             </div>
 
-            {/* Section 1: MAX- Calculation Formula */}
+            {/* Section 1: Formula */}
             <div className="space-y-2">
               <h4 className="text-xs font-bold text-zinc-200 border-b border-zinc-800 pb-1 flex items-center gap-1.5">
                 <Calculator className="w-3.5 h-3.5 text-zinc-400" />
                 1. MAX- (失点数) 自動計算式
               </h4>
               <p className="text-[11px] text-zinc-400">
-                入力時にスコアとノーツ数から MAX- を全自動計算する数式を設定します。（使用可能変数: <code className="font-mono text-zinc-300">notes</code>, <code className="font-mono text-zinc-300">score</code>）
+                スコアとノーツ数から MAX- を自動計算する数式。（使用可能変数: <code className="font-mono text-zinc-300">notes</code>, <code className="font-mono text-zinc-300">score</code>）
               </p>
               <input
                 type="text"
-                placeholder="例: 10000000 + notes - score  または  1010000 - score"
+                placeholder="例: 10000000 + notes - score"
                 value={editedFormula}
                 onChange={(e) => setEditedFormula(e.target.value)}
                 className="w-full bg-zinc-900 border border-zinc-800 text-zinc-100 text-xs rounded px-3 py-2 focus:outline-none focus:border-zinc-600 font-mono"
               />
-              <p className="text-[10px] text-zinc-500">
-                例(Arcaea): <span className="font-mono text-zinc-400">10000000 + notes - score</span> （理論値は 10,000,000 + ノーツ数のため）
-              </p>
             </div>
 
             {/* Section 2: Grade Mappings */}
@@ -853,10 +827,6 @@ export default function GameDetailPage() {
               <h4 className="text-xs font-bold text-zinc-200 border-b border-zinc-800 pb-1">
                 2. Grade (ランク) ＝ 達成区分のマッピング設定
               </h4>
-              <p className="text-[11px] text-zinc-400">
-                各Grade名が「MAX」「AP」「FC」「Clear」「Failed」のどれに対応するかを設定します。
-              </p>
-
               <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1">
                 {editedGradeMasters.map((g) => (
                   <div key={g.id} className="flex items-center justify-between bg-zinc-900 border border-zinc-800 px-3 py-1.5 rounded text-xs">
@@ -874,7 +844,6 @@ export default function GameDetailPage() {
                 ))}
               </div>
 
-              {/* Add Grade Mapping */}
               <div className="flex items-center space-x-2 pt-1 text-xs">
                 <input
                   type="text"
@@ -913,12 +882,11 @@ export default function GameDetailPage() {
               </div>
             </div>
 
-            {/* Section 3: Difficulty Masters & Reordering */}
+            {/* Section 3: Difficulty Masters */}
             <div className="space-y-3 pt-2">
               <h4 className="text-xs font-bold text-zinc-200 border-b border-zinc-800 pb-1">
                 3. 難易度 (Difficulty) マスター ＆ 並び順設定
               </h4>
-
               <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1">
                 {editedDiffMasters.map((d, idx) => (
                   <div key={d.id} className="flex items-center justify-between bg-zinc-900 border border-zinc-800 px-3 py-1.5 rounded text-xs">
@@ -928,7 +896,6 @@ export default function GameDetailPage() {
                         onClick={() => handleMoveDiffOrder(idx, 'up')}
                         disabled={idx === 0}
                         className="p-1 text-zinc-400 hover:text-zinc-100 disabled:opacity-30 transition"
-                        title="上へ移動"
                       >
                         <ArrowUp className="w-3.5 h-3.5" />
                       </button>
@@ -936,14 +903,12 @@ export default function GameDetailPage() {
                         onClick={() => handleMoveDiffOrder(idx, 'down')}
                         disabled={idx === editedDiffMasters.length - 1}
                         className="p-1 text-zinc-400 hover:text-zinc-100 disabled:opacity-30 transition"
-                        title="下へ移動"
                       >
                         <ArrowDown className="w-3.5 h-3.5" />
                       </button>
                       <button
                         onClick={() => setEditedDiffMasters(editedDiffMasters.filter(x => x.id !== d.id))}
                         className="p-1 text-zinc-600 hover:text-rose-400 transition ml-1"
-                        title="削除"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
@@ -952,7 +917,6 @@ export default function GameDetailPage() {
                 ))}
               </div>
 
-              {/* Add Difficulty Master */}
               <div className="flex space-x-2 pt-1 text-xs">
                 <input
                   type="text"
