@@ -13,8 +13,9 @@ export const INITIAL_GAMES: GameTitle[] = [
     clearTerm: 'Track Complete',
     failedTerm: 'Track Lost',
     device: 'Mobile',
-    maxMinusFormula: '10000000 + notes - score', // Arcaeaの計算式: 10000000 + ノーツ数 - スコア
+    maxMinusFormula: '10000000 + notes - score',
     gradeMasters: [
+      { id: 'g0', name: '未プレイ', category: 'Unplayed' },
       { id: 'g1', name: 'Pure Memory (理論値)', category: 'MAX' },
       { id: 'g2', name: 'Pure Memory', category: 'AP' },
       { id: 'g3', name: 'Full Recall', category: 'FC' },

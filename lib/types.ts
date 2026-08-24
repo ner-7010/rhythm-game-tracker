@@ -1,4 +1,4 @@
-export type GradeCategory = 'MAX' | 'AP' | 'FC' | 'Clear' | 'Failed';
+export type GradeCategory = 'MAX' | 'AP' | 'FC' | 'Clear' | 'Failed' | 'Unplayed';
 
 export interface GradeMasterItem {
   id: string;
@@ -26,7 +26,7 @@ export interface GameTitle {
   device: 'Mobile' | 'Arcade';
   specialMaxCount?: number;
   specialMaxTerm?: string;
-  maxMinusFormula?: string;               // MAX- 自動計算式 (例: "10000000 + notes - score")
+  maxMinusFormula?: string;
   gradeMasters?: GradeMasterItem[];
   difficultyMasters?: DifficultyMasterItem[];
   customFields?: CustomFieldDefinition[];
@@ -50,6 +50,7 @@ export interface PlayRecord {
   score: number;
   grade: string;
   maxMinus?: number;
+  isPlayed: boolean; // プレイ済みフラグ (Unplayedの場合はfalse)
   isAp: boolean;
   isFc: boolean;
   isClear: boolean;

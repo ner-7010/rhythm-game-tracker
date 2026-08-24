@@ -11,10 +11,9 @@ import {
   getStoredCustomFields
 } from '@/lib/storage';
 import {
-  ArrowLeft, Search, Plus, FileEdit, CheckCircle2, X, Download, Upload, Trash2, Settings, PlusCircle, ArrowUp, ArrowDown, ArrowUpDown, Calculator
+  ArrowLeft, Search, Plus, FileEdit, CheckCircle2, X, Download, Upload, Trash2, Settings, PlusCircle, ArrowUp, ArrowDown, ArrowUpDown, Calculator, CircleDashed
 } from 'lucide-react';
 
-// Safe Math Formula Evaluator
 const evaluateFormula = (formula: string, notesVal: number, scoreVal: number): number | undefined => {
   if (!formula || !formula.trim()) return undefined;
   try {
@@ -60,6 +59,7 @@ export default function GameDetailPage() {
     device: 'Mobile' as const,
     maxMinusFormula: '10000000 + notes - score',
     gradeMasters: [
+      { id: 'g0', name: '未プレイ', category: 'Unplayed' as const },
       { id: 'g1', name: 'Pure Memory (理論値)', category: 'MAX' as const },
       { id: 'g2', name: 'Pure Memory', category: 'AP' as const },
       { id: 'g3', name: 'Full Recall', category: 'FC' as const },
@@ -75,6 +75,7 @@ export default function GameDetailPage() {
   };
 
   const gradeMasters = currentGame.gradeMasters || [
+    { id: 'g0', name: '未プレイ', category: 'Unplayed' as const },
     { id: 'g1', name: 'Pure Memory (理論値)', category: 'MAX' as const },
     { id: 'g2', name: 'Pure Memory', category: 'AP' as const },
     { id: 'g3', name: 'Full Recall', category: 'FC' as const },
@@ -90,7 +91,7 @@ export default function GameDetailPage() {
   ];
 
   const [search, setSearch] = useState('');
-  const [apFilter, setApFilter] = useState<'All' | 'AP' | 'MAX'>('All');
+  const [apFilter, setApFilter] = useState<'All' | 'Unplayed' | 'Played' | 'AP' | 'MAX'>('All');
   const [sortBy, setSortBy] = useState<'default' | 'diffHigh' | 'diffLow' | 'levelHigh' | 'scoreHigh'>('default');
 
   // Record Modal State
@@ -103,7 +104,7 @@ export default function GameDetailPage() {
   const [constantChart, setConstantChart] = useState<string>('');
   const [notes, setNotes] = useState<string>('');
   const [score, setScore] = useState<string>('');
-  const [selectedGradeName, setSelectedGradeName] = useState<string>(gradeMasters[0]?.name || 'Pure Memory');
+  const [selectedGradeName, setSelectedGradeName] = useState<string>(gradeMasters[0]?.name || '未プレイ');
   const [maxMinus, setMaxMinus] = useState<string>('');
   const [dynamicAttrs, setDynamicAttrs] = useState<Record<string, any>>({});
 
@@ -155,7 +156,7 @@ export default function GameDetailPage() {
     setConstantChart('');
     setNotes('');
     setScore('');
-    setSelectedGradeName(gradeMasters[0]?.name || 'Pure Memory');
+    setSelectedGradeName(gradeMasters[0]?.name || '未プレイ');
     setMaxMinus('');
     setDynamicAttrs({});
     setIsRecordModalOpen(true);
@@ -168,42 +169,46 @@ export default function GameDetailPage() {
     setLevel(rec.level);
     setConstantChart(rec.constantChart !== undefined ? String(rec.constantChart) : '');
     setNotes(rec.notes !== undefined ? String(rec.notes) : '');
-    setScore(String(rec.score));
-    setSelectedGradeName(rec.grade);
+    setScore(rec.score ? String(rec.score) : '');
+    setSelectedGradeName(rec.grade || '未プレイ');
     setMaxMinus(rec.maxMinus !== undefined ? String(rec.maxMinus) : '');
     setDynamicAttrs(rec.customAttributes || {});
     setIsRecordModalOpen(true);
   };
 
+  // Automatic Flag Computation (including Unplayed category!)
   const calculateFlagsFromGrade = (gradeName: string) => {
     const matchedGrade = gradeMasters.find(g => g.name === gradeName);
-    const category = matchedGrade ? matchedGrade.category : 'AP';
+    const category = matchedGrade ? matchedGrade.category : 'Unplayed';
 
+    let isPlayed = false;
     let isMax = false;
     let isAp = false;
     let isFc = false;
     let isClear = false;
 
-    if (category === 'MAX') {
-      isMax = true; isAp = true; isFc = true; isClear = true;
+    if (category === 'Unplayed') {
+      isPlayed = false; isMax = false; isAp = false; isFc = false; isClear = false;
+    } else if (category === 'MAX') {
+      isPlayed = true; isMax = true; isAp = true; isFc = true; isClear = true;
     } else if (category === 'AP') {
-      isMax = false; isAp = true; isFc = true; isClear = true;
+      isPlayed = true; isMax = false; isAp = true; isFc = true; isClear = true;
     } else if (category === 'FC') {
-      isMax = false; isAp = false; isFc = true; isClear = true;
+      isPlayed = true; isMax = false; isAp = false; isFc = true; isClear = true;
     } else if (category === 'Clear') {
-      isMax = false; isAp = false; isFc = false; isClear = true;
+      isPlayed = true; isMax = false; isAp = false; isFc = false; isClear = true;
     } else {
-      isMax = false; isAp = false; isFc = false; isClear = false;
+      isPlayed = true; isMax = false; isAp = false; isFc = false; isClear = false;
     }
 
-    return { isMax, isAp, isFc, isClear };
+    return { isPlayed, isMax, isAp, isFc, isClear };
   };
 
   const handleSaveRecord = (e: React.FormEvent) => {
     e.preventDefault();
     if (!songTitle.trim()) return;
 
-    const { isMax, isAp, isFc, isClear } = calculateFlagsFromGrade(selectedGradeName);
+    const { isPlayed, isMax, isAp, isFc, isClear } = calculateFlagsFromGrade(selectedGradeName);
     let updatedRecords: PlayRecord[];
 
     if (editingRecordId) {
@@ -219,7 +224,7 @@ export default function GameDetailPage() {
             score: score !== '' ? parseInt(score, 10) : 0,
             grade: selectedGradeName,
             maxMinus: maxMinus !== '' ? parseInt(maxMinus, 10) : undefined,
-            isAp, isFc, isClear, isMax,
+            isPlayed, isAp, isFc, isClear, isMax,
             customAttributes: dynamicAttrs
           };
         }
@@ -237,7 +242,7 @@ export default function GameDetailPage() {
         score: score !== '' ? parseInt(score, 10) : 0,
         grade: selectedGradeName,
         maxMinus: maxMinus !== '' ? parseInt(maxMinus, 10) : undefined,
-        isAp, isFc, isClear, isMax,
+        isPlayed, isAp, isFc, isClear, isMax,
         playedAt: new Date().toISOString(),
         customAttributes: dynamicAttrs
       };
@@ -286,7 +291,7 @@ export default function GameDetailPage() {
     setIsSettingsModalOpen(false);
   };
 
-  // Export CSV (WITHOUT internal ID column!)
+  // Export CSV
   const handleExportSongsCsv = () => {
     const currentGameRecords = records.filter(r => r.gameId === gameId);
     const exportData = currentGameRecords.map(r => ({
@@ -296,8 +301,8 @@ export default function GameDetailPage() {
       'Level (レベル)': r.level,
       'Constant Chart (譜面定数)': r.constantChart ?? '',
       'Notes (ノーツ数)': r.notes ?? '',
-      'Score (スコア)': r.score,
-      'Grade (ランク)': r.grade,
+      'Score (スコア)': r.score || '',
+      'Grade (ランク)': r.grade || '未プレイ',
       'MAX- (失点)': r.maxMinus ?? '',
       'Composer (コンポーザー)': r.customAttributes?.['コンポーザー'] || r.customAttributes?.composer || '',
       'BPM': r.customAttributes?.['BPM'] || r.customAttributes?.bpm || '',
@@ -307,14 +312,14 @@ export default function GameDetailPage() {
     if (exportData.length === 0) {
       exportData.push({
         'Game Title': currentGame.name,
-        'Song Title (曲名)': 'サンプル曲',
+        'Song Title (曲名)': '新曲サンプル枠',
         'Difficulty (難易度)': difficultyMasters[0]?.name || 'MASTER',
         'Level (レベル)': '14',
         'Constant Chart (譜面定数)': '14.5',
         'Notes (ノーツ数)': '2000',
-        'Score (スコア)': 1000000,
-        'Grade (ランク)': gradeMasters[0]?.name || 'Pure Memory',
-        'MAX- (失点)': '0',
+        'Score (スコア)': '',
+        'Grade (ランク)': '未プレイ',
+        'MAX- (失点)': '',
         'Composer (コンポーザー)': '作曲者名',
         'BPM': '200',
         '譜面制作者': '譜面制作者名'
@@ -332,7 +337,7 @@ export default function GameDetailPage() {
     document.body.removeChild(link);
   };
 
-  // Import CSV (WITHOUT requiring internal ID, matches by Song Title + Difficulty!)
+  // Import CSV
   const handleImportSongsCsv = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -348,20 +353,19 @@ export default function GameDetailPage() {
           if (!title) return;
 
           const diff = row['Difficulty (難易度)'] || row['difficulty'] || difficultyMasters[0]?.name || 'MASTER';
-          const gName = row['Grade (ランク)'] || gradeMasters[0]?.name || 'Pure Memory';
-          const { isMax, isAp, isFc, isClear } = calculateFlagsFromGrade(gName);
+          const gName = row['Grade (ランク)'] || (row['Score (スコア)'] ? 'Pure Memory' : '未プレイ');
+          const { isPlayed, isMax, isAp, isFc, isClear } = calculateFlagsFromGrade(gName);
 
           const notesVal = row['Notes (ノーツ数)'] ? parseInt(row['Notes (ノーツ数)'], 10) : undefined;
-          const scoreVal = parseInt(row['Score (スコア)'] || row['score'] || '0', 10);
+          const scoreVal = row['Score (スコア)'] ? parseInt(row['Score (スコア)'], 10) : 0;
 
           let computedMaxMinus: number | undefined = undefined;
           if (row['MAX- (失点)'] !== '' && row['MAX- (失点)'] !== undefined) {
             computedMaxMinus = parseInt(row['MAX- (失点)'], 10);
-          } else if (currentGame.maxMinusFormula && notesVal !== undefined) {
+          } else if (currentGame.maxMinusFormula && notesVal !== undefined && scoreVal > 0) {
             computedMaxMinus = evaluateFormula(currentGame.maxMinusFormula, notesVal, scoreVal);
           }
 
-          // Check if record for same song + difficulty already exists for updating
           const existingIndex = currentRecordList.findIndex(
             r => r.gameId === gameId && r.songTitle === title && r.difficulty === diff
           );
@@ -377,7 +381,7 @@ export default function GameDetailPage() {
             score: scoreVal,
             grade: gName,
             maxMinus: computedMaxMinus,
-            isAp, isFc, isClear, isMax,
+            isPlayed, isAp, isFc, isClear, isMax,
             playedAt: new Date().toISOString(),
             customAttributes: {
               'コンポーザー': row['Composer (コンポーザー)'] || row['composer'],
@@ -404,8 +408,14 @@ export default function GameDetailPage() {
   const filteredRecords = currentGameRecords.filter(r => {
     const matchesSearch = r.songTitle.toLowerCase().includes(search.toLowerCase()) ||
                           Object.values(r.customAttributes || {}).some(v => String(v).toLowerCase().includes(search.toLowerCase()));
-    const matchesAp = apFilter === 'All' || (apFilter === 'AP' && r.isAp) || (apFilter === 'MAX' && r.isMax);
-    return matchesSearch && matchesAp;
+    
+    let matchesStatus = true;
+    if (apFilter === 'Unplayed') matchesStatus = !r.isPlayed;
+    if (apFilter === 'Played') matchesStatus = r.isPlayed;
+    if (apFilter === 'AP') matchesStatus = r.isAp;
+    if (apFilter === 'MAX') matchesStatus = r.isMax;
+
+    return matchesSearch && matchesStatus;
   });
 
   const sortedRecords = [...filteredRecords].sort((a, b) => {
@@ -428,8 +438,10 @@ export default function GameDetailPage() {
     return 0;
   });
 
-  const currentApCount = currentGameRecords.filter(r => r.isAp).length;
-  const currentMaxCount = currentGameRecords.filter(r => r.isMax).length;
+  const playedRecords = currentGameRecords.filter(r => r.isPlayed);
+  const unplayedRecords = currentGameRecords.filter(r => !r.isPlayed);
+  const currentApCount = playedRecords.filter(r => r.isAp).length;
+  const currentMaxCount = playedRecords.filter(r => r.isMax).length;
 
   return (
     <div className="space-y-6">
@@ -451,10 +463,10 @@ export default function GameDetailPage() {
             <h1 className="text-xl font-bold text-zinc-100">{currentGame.name}</h1>
           </div>
           <p className="text-xs text-zinc-500 mt-1">
-            登録曲数: <span className="font-mono text-zinc-300 font-bold">{currentGameRecords.length} 曲</span>
-            {currentGame.maxMinusFormula && (
-              <span className="ml-3 text-[11px] text-zinc-400">
-                (MAX- 計算式: <span className="font-mono text-zinc-300">{currentGame.maxMinusFormula}</span>)
+            既プレイ曲数: <span className="font-mono text-zinc-200 font-bold">{playedRecords.length} 曲</span>
+            {unplayedRecords.length > 0 && (
+              <span className="ml-2 text-zinc-500">
+                (未プレイ枠: <span className="font-mono text-zinc-400">{unplayedRecords.length} 曲</span> / 全{currentGameRecords.length}枠)
               </span>
             )}
           </p>
@@ -494,6 +506,20 @@ export default function GameDetailPage() {
               onChange={(e) => setSearch(e.target.value)}
               className="w-full bg-zinc-900 border border-zinc-800 text-zinc-200 text-xs rounded pl-8 pr-3 py-1.5 focus:outline-none focus:border-zinc-600"
             />
+          </div>
+
+          <div className="flex bg-zinc-900 border border-zinc-800 rounded p-0.5 text-xs">
+            {(['All', 'Played', 'Unplayed', 'AP', 'MAX'] as const).map(filter => (
+              <button
+                key={filter}
+                onClick={() => setApFilter(filter)}
+                className={`px-2.5 py-1 rounded transition ${
+                  apFilter === filter ? 'bg-zinc-800 text-zinc-100 font-medium' : 'text-zinc-400 hover:text-zinc-200'
+                }`}
+              >
+                {filter === 'All' ? '全枠' : filter === 'Played' ? 'プレイ済' : filter === 'Unplayed' ? '未プレイ' : filter === 'AP' ? currentGame.apTerm : currentGame.maxTerm}
+              </button>
+            ))}
           </div>
 
           <div className="flex items-center space-x-1 bg-zinc-900 border border-zinc-800 rounded px-2 py-1 text-xs">
@@ -572,14 +598,21 @@ export default function GameDetailPage() {
               {sortedRecords.length === 0 ? (
                 <tr>
                   <td colSpan={12} className="py-8 text-center text-zinc-500">
-                    登録されているプレイ記録がありません。「新しいプレイ記録を追加」ボタン、または「CSV取込」からデータを入れてください。
+                    対象の曲が見つかりません。「新しいプレイ記録を追加」ボタン、または「CSV取込」からデータを入れてください。
                   </td>
                 </tr>
               ) : (
                 sortedRecords.map((rec, index) => (
-                  <tr key={rec.id} className="hover:bg-zinc-900/40 transition-colors">
+                  <tr key={rec.id} className={`transition-colors ${!rec.isPlayed ? 'bg-zinc-950/40 text-zinc-500' : 'hover:bg-zinc-900/40'}`}>
                     <td className="py-2.5 px-4 font-mono text-zinc-500 num-tabular">{index + 1}</td>
-                    <td className="py-2.5 px-4 font-bold text-zinc-100">{rec.songTitle}</td>
+                    <td className="py-2.5 px-4 font-bold text-zinc-100 flex items-center gap-1.5">
+                      {!rec.isPlayed && (
+                        <span title="未プレイ">
+                          <CircleDashed className="w-3 h-3 text-zinc-600 flex-shrink-0" />
+                        </span>
+                      )}
+                      <span>{rec.songTitle}</span>
+                    </td>
                     <td className="py-2.5 px-3">
                       <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-zinc-900 text-zinc-200 border border-zinc-800">
                         {rec.difficulty}
@@ -588,13 +621,17 @@ export default function GameDetailPage() {
                     <td className="py-2.5 px-3 font-mono font-semibold text-zinc-300 num-tabular">{rec.level}</td>
                     <td className="py-2.5 px-3 font-mono text-zinc-400 num-tabular">{rec.constantChart ?? '-'}</td>
                     <td className="py-2.5 px-3 font-mono text-zinc-400 num-tabular">{rec.notes ? rec.notes.toLocaleString() : '-'}</td>
-                    <td className="py-2.5 px-4 font-mono font-bold text-zinc-100 num-tabular">{rec.score ? rec.score.toLocaleString() : '-'}</td>
+                    <td className="py-2.5 px-4 font-mono font-bold text-zinc-100 num-tabular">
+                      {rec.isPlayed && rec.score ? rec.score.toLocaleString() : <span className="text-zinc-600 font-normal">未入力</span>}
+                    </td>
                     <td className="py-2.5 px-3">
-                      <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-zinc-800 text-zinc-200 border border-zinc-700">
-                        {rec.grade}
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                        !rec.isPlayed ? 'bg-zinc-900 text-zinc-600 border border-zinc-800' : 'bg-zinc-800 text-zinc-200 border border-zinc-700'
+                      }`}>
+                        {rec.grade || '未プレイ'}
                       </span>
                     </td>
-                    <td className="py-2.5 px-3 font-mono text-zinc-400 num-tabular">{rec.maxMinus !== undefined ? `-${rec.maxMinus}` : '-'}</td>
+                    <td className="py-2.5 px-3 font-mono text-zinc-400 num-tabular">{rec.isPlayed && rec.maxMinus !== undefined ? `-${rec.maxMinus}` : '-'}</td>
                     <td className="py-2.5 px-3 text-center">
                       {rec.isAp ? (
                         <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] bg-zinc-800 text-zinc-200 border border-zinc-700">
@@ -613,7 +650,7 @@ export default function GameDetailPage() {
                       <button
                         onClick={() => handleOpenEditModal(rec)}
                         className="text-zinc-400 hover:text-zinc-100 p-1 transition"
-                        title="編集"
+                        title="編集 (スコア入力)"
                       >
                         <FileEdit className="w-3.5 h-3.5" />
                       </button>
@@ -639,7 +676,7 @@ export default function GameDetailPage() {
           <div className="bg-[#121215] border border-zinc-700 w-full max-w-lg rounded-lg p-6 space-y-4 shadow-xl max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
               <h3 className="text-sm font-bold text-zinc-100">
-                {editingRecordId ? `${currentGame.name} - プレイ記録の編集` : `${currentGame.name} - 新しいプレイ記録の追加`}
+                {editingRecordId ? `${currentGame.name} - プレイ記録の編集` : `${currentGame.name} - 新しい楽曲・枠の追加`}
               </h3>
               <button onClick={() => setIsRecordModalOpen(false)} className="text-zinc-500 hover:text-zinc-300">
                 <X className="w-4 h-4" />
@@ -713,7 +750,7 @@ export default function GameDetailPage() {
                   <label className="text-zinc-300 font-medium block mb-1">スコア (Score)</label>
                   <input
                     type="number"
-                    placeholder="例: 1000000"
+                    placeholder="未プレイなら空欄"
                     value={score}
                     onChange={(e) => handleScoreChange(e.target.value)}
                     className="w-full bg-zinc-900 border border-zinc-800 text-zinc-100 rounded px-3 py-2 focus:outline-none focus:border-zinc-600 font-mono"
@@ -723,7 +760,7 @@ export default function GameDetailPage() {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-zinc-300 font-medium block mb-1">Grade / ランク (自動全判定)</label>
+                  <label className="text-zinc-300 font-medium block mb-1">Grade / ランク</label>
                   <select
                     value={selectedGradeName}
                     onChange={(e) => setSelectedGradeName(e.target.value)}
@@ -810,9 +847,6 @@ export default function GameDetailPage() {
                 <Calculator className="w-3.5 h-3.5 text-zinc-400" />
                 1. MAX- (失点数) 自動計算式
               </h4>
-              <p className="text-[11px] text-zinc-400">
-                スコアとノーツ数から MAX- を自動計算する数式。（使用可能変数: <code className="font-mono text-zinc-300">notes</code>, <code className="font-mono text-zinc-300">score</code>）
-              </p>
               <input
                 type="text"
                 placeholder="例: 10000000 + notes - score"
@@ -827,6 +861,7 @@ export default function GameDetailPage() {
               <h4 className="text-xs font-bold text-zinc-200 border-b border-zinc-800 pb-1">
                 2. Grade (ランク) ＝ 達成区分のマッピング設定
               </h4>
+
               <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1">
                 {editedGradeMasters.map((g) => (
                   <div key={g.id} className="flex items-center justify-between bg-zinc-900 border border-zinc-800 px-3 py-1.5 rounded text-xs">
@@ -847,7 +882,7 @@ export default function GameDetailPage() {
               <div className="flex items-center space-x-2 pt-1 text-xs">
                 <input
                   type="text"
-                  placeholder="Grade名 (例: Pure Memory...)"
+                  placeholder="Grade名 (例: 未プレイ...)"
                   value={newGradeName}
                   onChange={(e) => setNewGradeName(e.target.value)}
                   className="flex-1 bg-zinc-900 border border-zinc-800 text-zinc-100 rounded px-3 py-1.5 focus:outline-none"
@@ -857,6 +892,7 @@ export default function GameDetailPage() {
                   onChange={(e) => setNewGradeCategory(e.target.value as GradeCategory)}
                   className="bg-zinc-900 border border-zinc-800 text-zinc-200 rounded px-2 py-1.5 focus:outline-none font-medium"
                 >
+                  <option value="Unplayed">Unplayed (未プレイ)</option>
                   <option value="MAX">MAX (理論値)</option>
                   <option value="AP">AP (All Perfect)</option>
                   <option value="FC">FC (Full Combo)</option>
