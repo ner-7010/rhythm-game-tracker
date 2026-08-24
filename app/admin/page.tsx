@@ -3,16 +3,30 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Papa from 'papaparse';
-import { getStoredGames, saveStoredGames } from '@/lib/storage';
+import { getStoredGames, fetchGamesAsync, saveGamesAsync } from '@/lib/storage';
 import { GameTitle, GradeMasterItem, DifficultyMasterItem, GradeCategory } from '@/lib/types';
-import { Download, Upload, Plus, FileSpreadsheet, CheckCircle, Database, Settings, ShieldCheck, Gamepad2 } from 'lucide-react';
+import { Download, Upload, Plus, FileSpreadsheet, CheckCircle, Database, Settings, ShieldCheck, Gamepad2, RefreshCw } from 'lucide-react';
 
 export default function AdminPage() {
   const [games, setGames] = useState<GameTitle[]>([]);
   const [importStatus, setImportStatus] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+
+  const loadData = async () => {
+    setIsLoading(true);
+    try {
+      setGames(getStoredGames());
+      const freshGames = await fetchGamesAsync();
+      setGames(freshGames);
+    } catch (e) {
+      console.error('Failed to load games in admin', e);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   useEffect(() => {
-    setGames(getStoredGames());
+    loadData();
   }, []);
 
   // Export Games Master Config CSV
@@ -173,8 +187,11 @@ export default function AdminPage() {
         });
 
         setGames(updatedGames);
-        saveStoredGames(updatedGames);
-        setImportStatus(`機種マスター一括更新完了: ${updatedGames.length} 件のゲームタイトル設定をアップデートしました！`);
+        saveGamesAsync(updatedGames).then(() => {
+          setImportStatus(`機種マスター一括更新完了: ${updatedGames.length} 件のゲームタイトル設定をSupabaseに保存しました！`);
+        }).catch(err => {
+          setImportStatus(`ローカルに保存されましたがSupabase同期でエラー: ${err.message}`);
+        });
       },
       error: (err) => {
         setImportStatus(`エラーが発生しました: ${err.message}`);
@@ -184,13 +201,25 @@ export default function AdminPage() {
 
   return (
     <div className="space-y-8 max-w-5xl mx-auto">
-      <div>
-        <h1 className="text-xl font-bold text-zinc-100 flex items-center gap-2">
-          <Settings className="w-5 h-5 text-zinc-400" /> 機種マスター設定 ＆ CSV一括管理
-        </h1>
-        <p className="text-xs text-zinc-400 mt-1">
-          登録されている全音ゲータイトルの機種マスター（難易度順序、Gradeマッピング、理論値有無、計算式）を一括管理します
-        </p>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-xl font-bold text-zinc-100 flex items-center gap-2">
+            <Settings className="w-5 h-5 text-zinc-400" /> 機種マスター設定 ＆ CSV一括管理
+          </h1>
+          <p className="text-xs text-zinc-400 mt-1">
+            登録されている全音ゲータイトルの機種マスター（難易度順序、Gradeマッピング、理論値有無、計算式）を一括管理します
+          </p>
+        </div>
+
+        <button
+          onClick={loadData}
+          disabled={isLoading}
+          className="inline-flex items-center space-x-1.5 bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-800 px-3 py-1.5 rounded text-xs font-medium transition self-start sm:self-auto"
+          title="クラウドDBから最新データを取得"
+        >
+          <RefreshCw className={`w-3.5 h-3.5 text-zinc-400 ${isLoading ? 'animate-spin' : ''}`} />
+          <span>最新データ同期</span>
+        </button>
       </div>
 
       {/* Security Status Box */}

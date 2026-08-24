@@ -3,13 +3,14 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { GameTitle, PlayRecord } from '@/lib/types';
-import { getStoredGames, saveStoredGames, getStoredRecords } from '@/lib/storage';
-import { Award, Zap, Gamepad2, TrendingUp, Calendar, ChevronRight, Search, Plus, X, BarChart2, Layers, CheckCircle2 } from 'lucide-react';
+import { getStoredGames, getStoredRecords, fetchGamesAsync, fetchRecordsAsync, saveGamesAsync } from '@/lib/storage';
+import { Award, Zap, Gamepad2, TrendingUp, Calendar, ChevronRight, Search, Plus, X, BarChart2, Layers, CheckCircle2, RefreshCw } from 'lucide-react';
 import { ResponsiveContainer, AreaChart, Area, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, Legend } from 'recharts';
 
 export default function DashboardPage() {
   const [games, setGames] = useState<GameTitle[]>([]);
   const [records, setRecords] = useState<PlayRecord[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
   const [period, setPeriod] = useState<'week' | 'month' | 'year'>('week');
   const [chartMode, setChartMode] = useState<'stacked' | 'gameComparison' | 'singleGame'>('stacked');
@@ -26,14 +27,37 @@ export default function DashboardPage() {
   const [newDevice, setNewDevice] = useState<'Mobile' | 'Arcade'>('Mobile');
   const [newHasMax, setNewHasMax] = useState<boolean>(true);
 
-  useEffect(() => {
-    const loadedGames = getStoredGames();
-    const loadedRecords = getStoredRecords();
-    setGames(loadedGames);
-    setRecords(loadedRecords);
-    if (loadedGames.length > 0 && !selectedGameId) {
-      setSelectedGameId(loadedGames[0].id);
+  const loadData = async () => {
+    setIsLoading(true);
+    try {
+      // 1. Initial quick load from local cache
+      const cachedGames = getStoredGames();
+      const cachedRecords = getStoredRecords();
+      setGames(cachedGames);
+      setRecords(cachedRecords);
+      if (cachedGames.length > 0 && !selectedGameId) {
+        setSelectedGameId(cachedGames[0].id);
+      }
+
+      // 2. Fetch fresh data from Supabase
+      const [freshGames, freshRecords] = await Promise.all([
+        fetchGamesAsync(),
+        fetchRecordsAsync()
+      ]);
+      setGames(freshGames);
+      setRecords(freshRecords);
+      if (freshGames.length > 0 && !selectedGameId) {
+        setSelectedGameId(freshGames[0].id);
+      }
+    } catch (e) {
+      console.error('Failed to load dashboard data', e);
+    } finally {
+      setIsLoading(false);
     }
+  };
+
+  useEffect(() => {
+    loadData();
   }, []);
 
   // Compute live game counts based on active (non-deleted) played records
@@ -63,7 +87,7 @@ export default function DashboardPage() {
     return matchesDevice && matchesSearch;
   });
 
-  const handleAddGame = (e: React.FormEvent) => {
+  const handleAddGame = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newGameName.trim()) return;
 
@@ -96,7 +120,7 @@ export default function DashboardPage() {
 
     const updated = [...games, newGame];
     setGames(updated);
-    saveStoredGames(updated);
+    await saveGamesAsync(updated);
 
     if (!selectedGameId) setSelectedGameId(id);
     setNewGameName('');
@@ -196,13 +220,25 @@ export default function DashboardPage() {
           </p>
         </div>
 
-        <button
-          onClick={() => setIsModalOpen(true)}
-          className="inline-flex items-center space-x-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 px-3.5 py-1.5 rounded text-xs font-medium transition self-start md:self-auto"
-        >
-          <Plus className="w-3.5 h-3.5 text-zinc-400" />
-          <span>新しい音ゲータイトルを追加</span>
-        </button>
+        <div className="flex items-center space-x-2 self-start md:self-auto">
+          <button
+            onClick={loadData}
+            disabled={isLoading}
+            className="inline-flex items-center space-x-1.5 bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-800 px-3 py-1.5 rounded text-xs font-medium transition"
+            title="クラウドDBから最新データを取得"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 text-zinc-400 ${isLoading ? 'animate-spin' : ''}`} />
+            <span>最新データ同期</span>
+          </button>
+
+          <button
+            onClick={() => setIsModalOpen(true)}
+            className="inline-flex items-center space-x-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 px-3.5 py-1.5 rounded text-xs font-medium transition"
+          >
+            <Plus className="w-3.5 h-3.5 text-zinc-400" />
+            <span>新しい音ゲータイトルを追加</span>
+          </button>
+        </div>
       </div>
 
       {/* Top Stat Cards Grid */}

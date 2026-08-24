@@ -15,11 +15,19 @@ CREATE TABLE games (
     sheet_name TEXT NOT NULL,
     ap_count INTEGER DEFAULT 0,
     max_count INTEGER DEFAULT 0,
-    ap_term TEXT NOT NULL,
-    max_term TEXT NOT NULL,
-    device TEXT CHECK (device IN ('Mobile', 'Arcade')) NOT NULL,
+    ap_term TEXT NOT NULL DEFAULT 'ALL PERFECT',
+    max_term TEXT NOT NULL DEFAULT 'MAX / 理論値',
+    fc_term TEXT DEFAULT 'Full Combo',
+    clear_term TEXT DEFAULT 'Clear',
+    failed_term TEXT DEFAULT 'Failed',
+    device TEXT CHECK (device IN ('Mobile', 'Arcade')) NOT NULL DEFAULT 'Mobile',
+    has_max_concept BOOLEAN DEFAULT TRUE,
     special_max_count INTEGER DEFAULT 0,
     special_max_term TEXT,
+    max_minus_formula TEXT,
+    grade_masters JSONB DEFAULT '[]'::jsonb,
+    difficulty_masters JSONB DEFAULT '[]'::jsonb,
+    custom_fields JSONB DEFAULT '[]'::jsonb,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
 );
 
@@ -29,6 +37,7 @@ CREATE TABLE custom_field_definitions (
     game_id TEXT REFERENCES games(id) ON DELETE CASCADE,
     name TEXT NOT NULL,
     field_type TEXT CHECK (field_type IN ('text', 'number', 'select')) NOT NULL,
+    options JSONB DEFAULT '[]'::jsonb,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
 );
 
@@ -45,13 +54,22 @@ CREATE TABLE play_records (
     score INTEGER NOT NULL,
     grade TEXT NOT NULL,
     max_minus INTEGER,
+    is_played BOOLEAN DEFAULT TRUE,
     is_ap BOOLEAN DEFAULT FALSE,
+    is_fc BOOLEAN DEFAULT FALSE,
+    is_clear BOOLEAN DEFAULT FALSE,
     is_max BOOLEAN DEFAULT FALSE,
+    is_deleted BOOLEAN DEFAULT FALSE,
     played_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL,
     custom_attributes JSONB DEFAULT '{}'::jsonb
 );
 
--- 5. Row Level Security (RLS) セキュリティ設定
+-- 5. インデックス作成 (検索・集計高速化)
+CREATE INDEX IF NOT EXISTS idx_play_records_game_id ON play_records(game_id);
+CREATE INDEX IF NOT EXISTS idx_play_records_user_id ON play_records(user_id);
+CREATE INDEX IF NOT EXISTS idx_play_records_is_deleted ON play_records(is_deleted);
+
+-- 6. Row Level Security (RLS) セキュリティ設定
 ALTER TABLE games ENABLE ROW LEVEL SECURITY;
 ALTER TABLE custom_field_definitions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE play_records ENABLE ROW LEVEL SECURITY;
@@ -61,11 +79,41 @@ CREATE POLICY "Public Read Games" ON games FOR SELECT USING (true);
 CREATE POLICY "Public Read Fields" ON custom_field_definitions FOR SELECT USING (true);
 CREATE POLICY "Public Read Records" ON play_records FOR SELECT USING (true);
 
--- 作成・更新・削除: ログイン済み認証ユーザーのみ許可 (Authenticated Write Only)
-CREATE POLICY "Auth Write Games" ON games FOR ALL TO authenticated USING (true) WITH CHECK (true);
-CREATE POLICY "Auth Write Fields" ON custom_field_definitions FOR ALL TO authenticated USING (true) WITH CHECK (true);
-CREATE POLICY "Auth Write Records" ON play_records FOR ALL TO authenticated USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+-- 作成・更新・削除: 許可
+CREATE POLICY "Public/Auth Write Games" ON games FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Public/Auth Write Fields" ON custom_field_definitions FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Public/Auth Write Records" ON play_records FOR ALL USING (true) WITH CHECK (true);
 
--- 6. 初期データ登録 (Arcaeaのみを残したクリーン初期状態)
-INSERT INTO games (id, name, sheet_name, ap_count, max_count, ap_term, max_term, device, special_max_count, special_max_term) VALUES
-('arcaea', 'Arcaea', 'PM[Arcaea]', 0, 0, 'Pure Memory', 'MAX / 理論値', 'Mobile', 0, NULL);
+-- 7. 初期データ登録 (Arcaea)
+INSERT INTO games (
+    id, name, sheet_name, ap_count, max_count, ap_term, max_term, fc_term, clear_term, failed_term,
+    device, has_max_concept, max_minus_formula, grade_masters, difficulty_masters
+) VALUES (
+    'arcaea',
+    'Arcaea',
+    'PM[Arcaea]',
+    0,
+    0,
+    'Pure Memory',
+    'MAX / 理論値',
+    'Full Recall',
+    'Track Complete',
+    'Track Lost',
+    'Mobile',
+    TRUE,
+    '10000000 + notes - score',
+    '[
+        {"id": "g0", "name": "未プレイ", "category": "Unplayed"},
+        {"id": "g1", "name": "Pure Memory (理論値)", "category": "MAX"},
+        {"id": "g2", "name": "Pure Memory", "category": "AP"},
+        {"id": "g3", "name": "Full Recall", "category": "FC"},
+        {"id": "g4", "name": "Track Complete", "category": "Clear"},
+        {"id": "g5", "name": "Track Lost", "category": "Failed"}
+    ]'::jsonb,
+    '[
+        {"id": "d1", "name": "BYD", "order": 1},
+        {"id": "d2", "name": "FTR", "order": 2},
+        {"id": "d3", "name": "PRS", "order": 3},
+        {"id": "d4", "name": "PST", "order": 4}
+    ]'::jsonb
+);

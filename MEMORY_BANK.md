@@ -7,8 +7,10 @@
 ## 🛠 技術スタック & アーキテクチャ
 
 * **フレームワーク**: Next.js 14 (App Router / React / TypeScript)
+* **ホスティング / デプロイ**: Vercel (GitHub main ブランチ連動で自動デプロイ)
 * **スタイル**: Tailwind CSS (ダークテーマ `#121215` / シック＆エレガント多色パレット)
-* **データ管理**: LocalStorage (`lib/storage.ts`) / 将来的には Supabase / RLS 連携可能な構造
+* **データ管理**: Supabase Cloud Database (`games`, `play_records`) + LocalStorage キャッシュ/フォールバック (`lib/storage.ts`) / Supabase Auth (`/login`)
+* **環境変数**: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` (Vercel 及び各ローカル `.env.local` に設定)
 * **CSVパース・出力**: PapaParse (`papaparse`) / UTF-8 with BOM (\uFEFF)
 * **グラフ・視覚化**: Recharts (`AreaChart`, `LineChart`)
 

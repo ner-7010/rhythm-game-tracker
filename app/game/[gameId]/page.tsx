@@ -8,10 +8,13 @@ import { PlayRecord, GameTitle, CustomFieldDefinition, GradeMasterItem, Difficul
 import {
   getStoredGames, saveStoredGames,
   getStoredRecords, saveStoredRecords,
-  getStoredCustomFields
+  getStoredCustomFields,
+  fetchGamesAsync, saveGamesAsync,
+  fetchRecordsAsync, replaceRecordsAsync,
+  upsertRecordAsync, deleteRecordAsync
 } from '@/lib/storage';
 import {
-  ArrowLeft, Search, Plus, FileEdit, CheckCircle2, X, Download, Upload, Trash2, Settings, PlusCircle, ArrowUp, ArrowDown, ArrowUpDown, Calculator, CircleDashed, ShieldAlert, ArchiveX
+  ArrowLeft, Search, Plus, FileEdit, CheckCircle2, X, Download, Upload, Trash2, Settings, PlusCircle, ArrowUp, ArrowDown, ArrowUpDown, Calculator, CircleDashed, ShieldAlert, ArchiveX, RefreshCw
 } from 'lucide-react';
 
 const parseCleanInt = (val: any): number => {
@@ -65,19 +68,39 @@ export default function GameDetailPage() {
   const [games, setGames] = useState<GameTitle[]>([]);
   const [records, setRecords] = useState<PlayRecord[]>([]);
   const [customFields, setCustomFields] = useState<CustomFieldDefinition[]>([]);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
 
   // Include Deleted Songs in Stats Toggle
   const [includeDeletedInStats, setIncludeDeletedInStats] = useState<boolean>(false);
 
-  useEffect(() => {
-    const loadedGames = getStoredGames();
-    const loadedRecords = getStoredRecords();
-    const loadedFields = getStoredCustomFields();
+  const loadData = async () => {
+    setIsLoading(true);
+    try {
+      // 1. Initial quick load from local cache
+      const cachedGames = getStoredGames();
+      const cachedRecords = getStoredRecords();
+      const loadedFields = getStoredCustomFields();
+      setGames(cachedGames);
+      setRecords(cachedRecords);
+      setCustomFields(loadedFields);
 
-    setGames(loadedGames);
-    setRecords(loadedRecords);
-    setCustomFields(loadedFields);
-  }, []);
+      // 2. Fetch fresh data from Supabase
+      const [freshGames, freshRecords] = await Promise.all([
+        fetchGamesAsync(),
+        fetchRecordsAsync()
+      ]);
+      setGames(freshGames);
+      setRecords(freshRecords);
+    } catch (e) {
+      console.error('Failed to load game details', e);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadData();
+  }, [gameId]);
 
   const currentGame = games.find(g => g.id === gameId) || {
     id: gameId,
@@ -253,39 +276,38 @@ export default function GameDetailPage() {
     return { isPlayed, isMax, isAp, isFc, isClear };
   };
 
-  const handleSaveRecord = (e: React.FormEvent) => {
+  const handleSaveRecord = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!songTitle.trim()) return;
 
     const { isPlayed, isMax, isAp, isFc, isClear } = calculateFlagsFromGrade(selectedGradeName);
-    let updatedRecords: PlayRecord[];
-
     const parsedScore = parseCleanInt(score);
     const parsedNotes = notes !== '' ? parseCleanInt(notes) : undefined;
     const parsedMaxMinus = maxMinus !== '' ? Math.abs(parseCleanInt(maxMinus)) : undefined;
 
+    let updatedRecords: PlayRecord[];
+    let recordToUpsert: PlayRecord;
+
     if (editingRecordId) {
-      updatedRecords = records.map(r => {
-        if (r.id === editingRecordId) {
-          return {
-            ...r,
-            songTitle,
-            difficulty,
-            level,
-            constantChart: constantChart !== '' ? parseCleanFloat(constantChart) : undefined,
-            notes: parsedNotes,
-            score: parsedScore,
-            grade: selectedGradeName,
-            maxMinus: parsedMaxMinus,
-            isPlayed, isAp, isFc, isClear, isMax,
-            isDeleted: isDeletedSong,
-            customAttributes: dynamicAttrs
-          };
-        }
-        return r;
-      });
+      recordToUpsert = {
+        id: editingRecordId,
+        gameId,
+        songTitle,
+        difficulty,
+        level,
+        constantChart: constantChart !== '' ? parseCleanFloat(constantChart) : undefined,
+        notes: parsedNotes,
+        score: parsedScore,
+        grade: selectedGradeName,
+        maxMinus: parsedMaxMinus,
+        isPlayed, isAp, isFc, isClear, isMax,
+        isDeleted: isDeletedSong,
+        playedAt: records.find(r => r.id === editingRecordId)?.playedAt || new Date().toISOString(),
+        customAttributes: dynamicAttrs
+      };
+      updatedRecords = records.map(r => r.id === editingRecordId ? recordToUpsert : r);
     } else {
-      const newRecord: PlayRecord = {
+      recordToUpsert = {
         id: `rec-${Date.now()}`,
         gameId,
         songTitle,
@@ -301,18 +323,18 @@ export default function GameDetailPage() {
         playedAt: new Date().toISOString(),
         customAttributes: dynamicAttrs
       };
-      updatedRecords = [newRecord, ...records];
+      updatedRecords = [recordToUpsert, ...records];
     }
 
     setRecords(updatedRecords);
-    saveStoredRecords(updatedRecords);
+    await upsertRecordAsync(recordToUpsert);
     setIsRecordModalOpen(false);
   };
 
-  const handleDeleteRecord = (id: string) => {
+  const handleDeleteRecord = async (id: string) => {
     const updated = records.filter(r => r.id !== id);
     setRecords(updated);
-    saveStoredRecords(updated);
+    await deleteRecordAsync(id, gameId);
   };
 
   const handleMoveDiffOrder = (index: number, direction: 'up' | 'down') => {
@@ -328,7 +350,7 @@ export default function GameDetailPage() {
     setEditedDiffMasters(reordered);
   };
 
-  const handleSaveGameSettings = () => {
+  const handleSaveGameSettings = async () => {
     const updatedGames = games.map(g => {
       if (g.id === gameId) {
         return {
@@ -343,7 +365,7 @@ export default function GameDetailPage() {
     });
 
     setGames(updatedGames);
-    saveStoredGames(updatedGames);
+    await saveGamesAsync(updatedGames);
     setIsSettingsModalOpen(false);
   };
 
@@ -403,7 +425,7 @@ export default function GameDetailPage() {
     Papa.parse(file, {
       header: true,
       skipEmptyLines: true,
-      complete: (results) => {
+      complete: async (results) => {
         const otherGameRecords = records.filter(r => r.gameId !== gameId);
 
         const newGameRecords: PlayRecord[] = results.data.map((row: any, idx: number) => {
@@ -453,7 +475,7 @@ export default function GameDetailPage() {
 
         const updatedAllRecords = [...newGameRecords, ...otherGameRecords];
         setRecords(updatedAllRecords);
-        saveStoredRecords(updatedAllRecords);
+        await replaceRecordsAsync(gameId, newGameRecords);
       }
     });
   };
@@ -647,6 +669,16 @@ export default function GameDetailPage() {
         </div>
 
         <div className="flex items-center space-x-2">
+          <button
+            onClick={loadData}
+            disabled={isLoading}
+            title="クラウドDBから最新データを取得"
+            className="flex items-center space-x-1 bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-800 px-2.5 py-1.5 rounded text-xs font-medium transition"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 text-zinc-400 ${isLoading ? 'animate-spin' : ''}`} />
+            <span className="hidden md:inline">同期</span>
+          </button>
+
           <button
             onClick={handleExportSongsCsv}
             title="CSV出力"

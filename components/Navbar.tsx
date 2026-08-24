@@ -4,14 +4,29 @@ import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { LayoutDashboard, FileSpreadsheet, LogIn, LogOut, User, Disc } from 'lucide-react';
+import { supabase } from '@/lib/supabase';
 
 export default function Navbar() {
   const router = useRouter();
   const [user, setUser] = useState<{ id: string; name: string } | null>(null);
 
   useEffect(() => {
-    // Check localStorage login state
-    const checkLogin = () => {
+    // 1. Initial check Supabase session
+    const getSession = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.user) {
+          setUser({
+            id: session.user.id,
+            name: session.user.email?.split('@')[0] || session.user.id.slice(0, 8),
+          });
+          return;
+        }
+      } catch (e) {
+        console.warn('Failed to get Supabase session', e);
+      }
+
+      // LocalStorage fallback
       const storedUser = localStorage.getItem('rg_stats_user');
       if (storedUser) {
         try {
@@ -24,12 +39,40 @@ export default function Navbar() {
       }
     };
 
-    checkLogin();
-    window.addEventListener('storage', checkLogin);
-    return () => window.removeEventListener('storage', checkLogin);
+    getSession();
+
+    // 2. Listen to Supabase Auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user) {
+        setUser({
+          id: session.user.id,
+          name: session.user.email?.split('@')[0] || session.user.id.slice(0, 8),
+        });
+      } else {
+        const storedUser = localStorage.getItem('rg_stats_user');
+        if (storedUser) {
+          try {
+            setUser(JSON.parse(storedUser));
+          } catch {
+            setUser({ id: 'admin', name: storedUser });
+          }
+        } else {
+          setUser(null);
+        }
+      }
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
   }, []);
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try {
+      await supabase.auth.signOut();
+    } catch (e) {
+      console.error('Error signing out', e);
+    }
     localStorage.removeItem('rg_stats_user');
     setUser(null);
     router.push('/');
