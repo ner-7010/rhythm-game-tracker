@@ -14,6 +14,23 @@ import {
   ArrowLeft, Search, Plus, FileEdit, CheckCircle2, X, Download, Upload, Trash2, Settings, PlusCircle, ArrowUp, ArrowDown, ArrowUpDown, Calculator, CircleDashed
 } from 'lucide-react';
 
+// Robust Integer Parser (removes commas and extra characters)
+const parseCleanInt = (val: any): number => {
+  if (val === null || val === undefined || String(val).trim() === '') return 0;
+  const cleanStr = String(val).replace(/,/g, '').replace(/[^\d-]/g, '');
+  const num = parseInt(cleanStr, 10);
+  return isNaN(num) ? 0 : num;
+};
+
+// Robust Float Parser
+const parseCleanFloat = (val: any): number | undefined => {
+  if (val === null || val === undefined || String(val).trim() === '') return undefined;
+  const cleanStr = String(val).replace(/,/g, '').replace(/[^\d.-]/g, '');
+  const num = parseFloat(cleanStr);
+  return isNaN(num) ? undefined : num;
+};
+
+// Safe Math Formula Evaluator
 const evaluateFormula = (formula: string, notesVal: number, scoreVal: number): number | undefined => {
   if (!formula || !formula.trim()) return undefined;
   try {
@@ -129,8 +146,8 @@ export default function GameDetailPage() {
     const formula = currentGame.maxMinusFormula;
     if (!formula) return;
 
-    const nVal = newNotesStr !== '' ? parseInt(newNotesStr, 10) : 0;
-    const sVal = newScoreStr !== '' ? parseInt(newScoreStr, 10) : 0;
+    const nVal = parseCleanInt(newNotesStr);
+    const sVal = parseCleanInt(newScoreStr);
 
     const calcResult = evaluateFormula(formula, nVal, sVal);
     if (calcResult !== undefined) {
@@ -176,9 +193,25 @@ export default function GameDetailPage() {
     setIsRecordModalOpen(true);
   };
 
+  // Flexible Grade Category Resolver (handles abbreviations like PM, FR, C, TL)
   const calculateFlagsFromGrade = (gradeName: string) => {
-    const matchedGrade = gradeMasters.find(g => g.name === gradeName);
-    const category = matchedGrade ? matchedGrade.category : 'Unplayed';
+    const trimmed = String(gradeName || '').trim();
+    
+    // Check direct gradeMasters match
+    let matchedGrade = gradeMasters.find(g => g.name.toLowerCase() === trimmed.toLowerCase());
+    
+    let category: GradeCategory = matchedGrade ? matchedGrade.category : 'Unplayed';
+
+    // Abbreviations fallback
+    if (!matchedGrade) {
+      if (trimmed === 'PM' || trimmed.includes('理論値') || trimmed.includes('MAX')) category = 'MAX';
+      else if (trimmed === 'AP' || trimmed.includes('Pure Memory')) category = 'AP';
+      else if (trimmed === 'FR' || trimmed === 'FC' || trimmed.includes('Full')) category = 'FC';
+      else if (trimmed === 'C' || trimmed.includes('Clear') || trimmed.includes('Complete')) category = 'Clear';
+      else if (trimmed === 'TL' || trimmed.includes('Lost') || trimmed.includes('Failed')) category = 'Failed';
+      else if (trimmed === '未プレイ' || trimmed === '-') category = 'Unplayed';
+      else category = 'Clear';
+    }
 
     let isPlayed = false;
     let isMax = false;
@@ -210,6 +243,10 @@ export default function GameDetailPage() {
     const { isPlayed, isMax, isAp, isFc, isClear } = calculateFlagsFromGrade(selectedGradeName);
     let updatedRecords: PlayRecord[];
 
+    const parsedScore = parseCleanInt(score);
+    const parsedNotes = notes !== '' ? parseCleanInt(notes) : undefined;
+    const parsedMaxMinus = maxMinus !== '' ? Math.abs(parseCleanInt(maxMinus)) : undefined;
+
     if (editingRecordId) {
       updatedRecords = records.map(r => {
         if (r.id === editingRecordId) {
@@ -218,11 +255,11 @@ export default function GameDetailPage() {
             songTitle,
             difficulty,
             level,
-            constantChart: constantChart !== '' ? parseFloat(constantChart) : undefined,
-            notes: notes !== '' ? parseInt(notes, 10) : undefined,
-            score: score !== '' ? parseInt(score, 10) : 0,
+            constantChart: constantChart !== '' ? parseCleanFloat(constantChart) : undefined,
+            notes: parsedNotes,
+            score: parsedScore,
             grade: selectedGradeName,
-            maxMinus: maxMinus !== '' ? parseInt(maxMinus, 10) : undefined,
+            maxMinus: parsedMaxMinus,
             isPlayed, isAp, isFc, isClear, isMax,
             customAttributes: dynamicAttrs
           };
@@ -236,11 +273,11 @@ export default function GameDetailPage() {
         songTitle,
         difficulty,
         level,
-        constantChart: constantChart !== '' ? parseFloat(constantChart) : undefined,
-        notes: notes !== '' ? parseInt(notes, 10) : undefined,
-        score: score !== '' ? parseInt(score, 10) : 0,
+        constantChart: constantChart !== '' ? parseCleanFloat(constantChart) : undefined,
+        notes: parsedNotes,
+        score: parsedScore,
         grade: selectedGradeName,
-        maxMinus: maxMinus !== '' ? parseInt(maxMinus, 10) : undefined,
+        maxMinus: parsedMaxMinus,
         isPlayed, isAp, isFc, isClear, isMax,
         playedAt: new Date().toISOString(),
         customAttributes: dynamicAttrs
@@ -302,7 +339,7 @@ export default function GameDetailPage() {
       'Notes (ノーツ数)': r.notes ?? '',
       'Score (スコア)': r.score || '',
       'Grade (ランク)': r.grade || '未プレイ',
-      'MAX- (失点)': r.maxMinus ?? '',
+      'MAX- (失点)': r.maxMinus !== undefined ? `-${r.maxMinus}` : '',
       'Composer (コンポーザー)': r.customAttributes?.['コンポーザー'] || r.customAttributes?.composer || '',
       'BPM': r.customAttributes?.['BPM'] || r.customAttributes?.bpm || '',
       '譜面制作者': r.customAttributes?.['譜面制作者'] || r.customAttributes?.notesDesigner || ''
@@ -336,7 +373,7 @@ export default function GameDetailPage() {
     document.body.removeChild(link);
   };
 
-  // Import CSV (FULL OVERWRITE / REPLACE LOGIC for this gameId)
+  // Import CSV with ROBUST COMMA CLEANING
   const handleImportSongsCsv = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -345,22 +382,27 @@ export default function GameDetailPage() {
       header: true,
       skipEmptyLines: true,
       complete: (results) => {
-        // 1. Filter OUT all existing records of THIS gameId (Clear old data completely!)
         const otherGameRecords = records.filter(r => r.gameId !== gameId);
 
-        // 2. Parse new records from CSV
         const newGameRecords: PlayRecord[] = results.data.map((row: any, idx: number) => {
-          const title = row['Song Title (曲名)'] || row['title'] || row['曲名'] || '無題';
-          const diff = row['Difficulty (難易度)'] || row['difficulty'] || difficultyMasters[0]?.name || 'MASTER';
-          const gName = row['Grade (ランク)'] || (row['Score (スコア)'] ? 'Pure Memory' : '未プレイ');
+          const title = String(row['Song Title (曲名)'] || row['title'] || row['曲名'] || '無題').trim();
+          const diff = String(row['Difficulty (難易度)'] || row['difficulty'] || difficultyMasters[0]?.name || 'MASTER').trim();
+          const gName = String(row['Grade (ランク)'] || row['grade'] || (row['Score (スコア)'] ? 'Pure Memory' : '未プレイ')).trim();
+          
           const { isPlayed, isMax, isAp, isFc, isClear } = calculateFlagsFromGrade(gName);
 
-          const notesVal = row['Notes (ノーツ数)'] ? parseInt(row['Notes (ノーツ数)'], 10) : undefined;
-          const scoreVal = row['Score (スコア)'] ? parseInt(row['Score (スコア)'], 10) : 0;
+          // ROBUST NUMBER CLEANING FOR COMMAS (e.g., "9,854,120" -> 9854120, "10,000,469" -> 10000469)
+          const notesVal = row['Notes (ノーツ数)'] !== undefined && String(row['Notes (ノーツ数)']).trim() !== ''
+            ? parseCleanInt(row['Notes (ノーツ数)'])
+            : undefined;
+          
+          const scoreVal = row['Score (スコア)'] !== undefined && String(row['Score (スコア)']).trim() !== ''
+            ? parseCleanInt(row['Score (スコア)'])
+            : 0;
 
           let computedMaxMinus: number | undefined = undefined;
           if (row['MAX- (失点)'] !== '' && row['MAX- (失点)'] !== undefined) {
-            computedMaxMinus = parseInt(row['MAX- (失点)'], 10);
+            computedMaxMinus = Math.abs(parseCleanInt(row['MAX- (失点)']));
           } else if (currentGame.maxMinusFormula && notesVal !== undefined && scoreVal > 0) {
             computedMaxMinus = evaluateFormula(currentGame.maxMinusFormula, notesVal, scoreVal);
           }
@@ -370,8 +412,8 @@ export default function GameDetailPage() {
             gameId,
             songTitle: title,
             difficulty: diff,
-            level: String(row['Level (レベル)'] || row['level'] || '12'),
-            constantChart: row['Constant Chart (譜面定数)'] ? parseFloat(row['Constant Chart (譜面定数)']) : undefined,
+            level: String(row['Level (レベル)'] || row['level'] || '12').trim(),
+            constantChart: row['Constant Chart (譜面定数)'] ? parseCleanFloat(row['Constant Chart (譜面定数)']) : undefined,
             notes: notesVal,
             score: scoreVal,
             grade: gName,
@@ -386,7 +428,6 @@ export default function GameDetailPage() {
           };
         });
 
-        // 3. Combine and save (Old data for this game is completely replaced by new CSV!)
         const updatedAllRecords = [...newGameRecords, ...otherGameRecords];
         setRecords(updatedAllRecords);
         saveStoredRecords(updatedAllRecords);
@@ -421,7 +462,7 @@ export default function GameDetailPage() {
       return orderB - orderA;
     }
     if (sortBy === 'levelHigh') {
-      return (b.constantChart || parseFloat(b.level) || 0) - (a.constantChart || parseFloat(a.level) || 0);
+      return (b.constantChart || parseCleanFloat(b.level) || 0) - (a.constantChart || parseCleanFloat(a.level) || 0);
     }
     if (sortBy === 'scoreHigh') {
       return b.score - a.score;
