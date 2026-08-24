@@ -9,15 +9,28 @@ export async function GET(request: Request) {
     const gameId = searchParams.get("gameId");
 
     const supabase = getSupabaseClient();
-    let query = supabase.from("play_records").select("*").range(0, 49999);
-    if (gameId) {
-      query = query.eq("game_id", gameId);
+    let allRecords: any[] = [];
+    let from = 0;
+    const pageSize = 1000;
+
+    while (true) {
+      let query = supabase.from("play_records").select("*").range(from, from + pageSize - 1);
+      if (gameId) {
+        query = query.eq("game_id", gameId);
+      }
+
+      const { data, error } = await query;
+      if (error) {
+        return NextResponse.json({ error: error.message }, { status: 500 });
+      }
+
+      if (!data || data.length === 0) break;
+      allRecords = allRecords.concat(data);
+      if (data.length < pageSize) break; // Reached last page
+      from += pageSize;
     }
-    const { data, error } = await query;
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
-    }
-    return NextResponse.json({ records: data || [] });
+
+    return NextResponse.json({ records: allRecords, total: allRecords.length });
   } catch (e: any) {
     return NextResponse.json({ error: e?.message || "Internal server error" }, { status: 500 });
   }

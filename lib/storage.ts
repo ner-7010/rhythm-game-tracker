@@ -199,15 +199,26 @@ export const fetchRecordsAsync = async (gameId?: string): Promise<PlayRecord[]> 
     console.warn('API /api/records fetch error, fallback to direct Supabase', e);
   }
 
-  // Direct Supabase fallback
+  // Direct Supabase fallback (with pagination loop)
   try {
-    let query = supabase.from('play_records').select('*').range(0, 49999);
-    if (gameId) {
-      query = query.eq('game_id', gameId);
+    let allDbRecords: any[] = [];
+    let from = 0;
+    const pageSize = 1000;
+
+    while (true) {
+      let query = supabase.from('play_records').select('*').range(from, from + pageSize - 1);
+      if (gameId) {
+        query = query.eq('game_id', gameId);
+      }
+      const { data, error } = await query;
+      if (error || !data || data.length === 0) break;
+      allDbRecords = allDbRecords.concat(data);
+      if (data.length < pageSize) break;
+      from += pageSize;
     }
-    const { data, error } = await query;
-    if (!error && Array.isArray(data)) {
-      const records = data.map(mapDbToRecord);
+
+    if (allDbRecords.length > 0) {
+      const records = allDbRecords.map(mapDbToRecord);
       if (gameId) {
         const otherRecords = getStoredRecords().filter(r => r.gameId !== gameId);
         saveStoredRecords([...otherRecords, ...records]);
