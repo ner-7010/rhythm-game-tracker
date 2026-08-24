@@ -9,7 +9,7 @@ export async function GET(request: Request) {
     const gameId = searchParams.get("gameId");
 
     const supabase = getSupabaseClient();
-    let query = supabase.from("play_records").select("*");
+    let query = supabase.from("play_records").select("*").range(0, 49999);
     if (gameId) {
       query = query.eq("game_id", gameId);
     }
@@ -52,7 +52,12 @@ export async function POST(request: Request) {
         if (error) throw error;
       }
 
-      return NextResponse.json({ success: true, count: insertRecords.length });
+      // 3. Update game ap_count and max_count
+      const apCount = insertRecords.filter((r: any) => (r.is_ap || r.is_max) && !r.is_deleted).length;
+      const maxCount = insertRecords.filter((r: any) => r.is_max && !r.is_deleted).length;
+      await supabase.from("games").update({ ap_count: apCount, max_count: maxCount }).eq("id", gameId);
+
+      return NextResponse.json({ success: true, count: insertRecords.length, apCount, maxCount });
     } else if (mode === "upsertSingle") {
       if (!record) {
         return NextResponse.json({ error: "Missing record to upsert" }, { status: 400 });

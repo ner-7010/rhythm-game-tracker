@@ -201,7 +201,7 @@ export const fetchRecordsAsync = async (gameId?: string): Promise<PlayRecord[]> 
 
   // Direct Supabase fallback
   try {
-    let query = supabase.from('play_records').select('*');
+    let query = supabase.from('play_records').select('*').range(0, 49999);
     if (gameId) {
       query = query.eq('game_id', gameId);
     }

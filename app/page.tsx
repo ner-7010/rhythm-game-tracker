@@ -67,20 +67,21 @@ export default function DashboardPage() {
 
   const gamesWithLiveCounts = games.map(g => {
     const gameRecs = activeRecords.filter(r => r.gameId === g.id && r.isPlayed);
-    const ap = gameRecs.filter(r => r.isAp).length;
+    const hasRecs = gameRecs.length > 0;
+    const ap = gameRecs.filter(r => r.isAp || r.isMax).length;
     const max = gameRecs.filter(r => r.isMax).length;
     return {
       ...g,
-      apCount: ap || g.apCount,
-      maxCount: max || g.maxCount
+      apCount: hasRecs ? ap : g.apCount,
+      maxCount: hasRecs ? max : g.maxCount
     };
   });
 
   const playedRecords = activeRecords.filter(r => r.isPlayed);
   const totalClear = playedRecords.filter(r => r.isClear).length;
-  const totalFc = playedRecords.filter(r => r.isFc).length;
-  const totalAp = gamesWithLiveCounts.reduce((acc, g) => acc + g.apCount, 0);
-  const totalMax = gamesWithLiveCounts.filter(g => g.hasMaxConcept !== false).reduce((acc, g) => acc + g.maxCount, 0);
+  const totalFc = playedRecords.filter(r => r.isFc || r.isAp || r.isMax).length;
+  const totalAp = playedRecords.filter(r => r.isAp || r.isMax).length;
+  const totalMax = playedRecords.filter(r => r.isMax).length;
 
   const filteredGames = gamesWithLiveCounts.filter(g => {
     const matchesDevice = filterDevice === 'All' || g.device === filterDevice;
