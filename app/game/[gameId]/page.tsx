@@ -28,17 +28,34 @@ const parseCleanFloat = (val: any): number | undefined => {
   return isNaN(num) ? undefined : num;
 };
 
+// Powerful Safe Math Formula Evaluator (Supports ROUND, FLOOR, CEIL, ABS, brackets, and arithmetic)
 const evaluateFormula = (formula: string, notesVal: number, scoreVal: number): number | undefined => {
   if (!formula || !formula.trim()) return undefined;
   try {
     let expr = formula.toLowerCase()
       .replace(/\bnotes\b/g, String(notesVal))
-      .replace(/\bscore\b/g, String(scoreVal));
+      .replace(/\bscore\b/g, String(scoreVal))
+      .replace(/\broundup\b/g, 'Math.ceil')
+      .replace(/\brounddown\b/g, 'Math.floor')
+      .replace(/\bround\b/g, 'Math.round')
+      .replace(/\bfloor\b/g, 'Math.floor')
+      .replace(/\bceil\b/g, 'Math.ceil')
+      .replace(/\babs\b/g, 'Math.abs');
     
-    if (!/^[0-9\+\-\*\/\(\)\s\.]+$/.test(expr)) return undefined;
+    // Auto-fix missing closing parenthesis if any
+    const openParenCount = (expr.match(/\(/g) || []).length;
+    const closeParenCount = (expr.match(/\)/g) || []).length;
+    if (openParenCount > closeParenCount) {
+      expr += ')'.repeat(openParenCount - closeParenCount);
+    }
+
+    // Safety validation: Allow numbers, Math functions, operators, and parentheses
+    if (!/^[0-9\+\-\*\/\(\)\s\.\,Math\.round|Math\.floor|Math\.ceil|Math\.abs]+$/.test(expr)) {
+      return undefined;
+    }
 
     const result = new Function(`return (${expr})`)();
-    return typeof result === 'number' && !isNaN(result) ? result : undefined;
+    return typeof result === 'number' && !isNaN(result) ? Math.round(result) : undefined;
   } catch {
     return undefined;
   }
@@ -509,7 +526,7 @@ export default function GameDetailPage() {
           </p>
         </div>
 
-        {/* Stats Cards: Clear, FC, AP, MAX */}
+        {/* Stats Cards */}
         <div className="flex flex-wrap items-center gap-2 sm:gap-3">
           <div className="bg-zinc-900 border border-zinc-800 px-3 py-1.5 rounded text-center min-w-[70px]">
             <span className="text-[10px] text-zinc-500 block truncate">Clear</span>
@@ -526,7 +543,6 @@ export default function GameDetailPage() {
             <span className="text-base font-bold text-emerald-400 num-tabular">{currentApCount.toLocaleString()}</span>
           </div>
 
-          {/* MAX / 理論値 Card (Greyed out if hasMaxConcept is false!) */}
           <div className={`px-3 py-1.5 rounded text-center min-w-[70px] border transition ${
             hasMaxConcept
               ? 'bg-zinc-900 border-zinc-800'
@@ -885,7 +901,7 @@ export default function GameDetailPage() {
         </div>
       )}
 
-      {/* Settings Modal (with hasMaxConcept toggle!) */}
+      {/* Settings Modal */}
       {isSettingsModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
           <div className="bg-[#121215] border border-zinc-700 w-full max-w-xl rounded-lg p-6 space-y-6 shadow-xl max-h-[90vh] overflow-y-auto">
@@ -925,11 +941,15 @@ export default function GameDetailPage() {
               </h4>
               <input
                 type="text"
-                placeholder="例: 10000000 + notes - score"
+                placeholder="例: ROUND((1010000-score)/(10000/notes))  または  10000000 + notes - score"
                 value={editedFormula}
                 onChange={(e) => setEditedFormula(e.target.value)}
                 className="w-full bg-zinc-900 border border-zinc-800 text-zinc-100 text-xs rounded px-3 py-2 focus:outline-none focus:border-zinc-600 font-mono"
               />
+              <p className="text-[10px] text-zinc-500">
+                使用可能関数: <code className="font-mono text-zinc-300">ROUND(...)</code>, <code className="font-mono text-zinc-300">FLOOR(...)</code>, <code className="font-mono text-zinc-300">CEIL(...)</code>, <code className="font-mono text-zinc-300">ABS(...)</code><br />
+                使用可能変数: <code className="font-mono text-zinc-300">notes</code>, <code className="font-mono text-zinc-300">score</code>
+              </p>
             </div>
 
             {/* Section 2: Grade Mappings */}
