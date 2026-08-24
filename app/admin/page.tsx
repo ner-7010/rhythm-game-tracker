@@ -17,8 +17,42 @@ export default function AdminPage() {
 
   const [importStatus, setImportStatus] = useState<string | null>(null);
 
-  // Export full existing data as template CSV
-  const handleDownloadExistingDataCsv = () => {
+  // Export Song Play Records CSV Template (Comprehensive Format)
+  const handleDownloadSongsTemplateCsv = () => {
+    const templateData = [
+      {
+        'ID (識別子)': 'rec-001',
+        'Game Title (ゲーム名)': 'Arcaea',
+        'Song Title (曲名)': 'Testify',
+        'Difficulty (難易度)': 'BYD',
+        'Level (レベル)': '12',
+        'Constant Chart (譜面定数)': '12.0',
+        'Notes (ノーツ数)': '2222',
+        'Score (スコア)': '10000000',
+        'Grade (ランク)': 'PM',
+        'MAX- (失点)': '0',
+        'is_AP (1:はい / 0:いいえ)': '1',
+        'is_FC (1:はい / 0:いいえ)': '1',
+        'is_Clear (1:はい / 0:いいえ)': '1',
+        'Composer (コンポーザー)': 'void (Mournfinale)',
+        'BPM': '195',
+        '備考': ''
+      }
+    ];
+
+    const csv = Papa.unparse(templateData);
+    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `rg_stats_song_records_template.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  // Export Game Titles Summary CSV
+  const handleDownloadGamesSummaryCsv = () => {
     const dataToExport = INITIAL_GAMES.map(g => ({
       'ID (識別子)': g.id,
       'Game Title': g.name,
@@ -27,10 +61,7 @@ export default function AdminPage() {
       'MAX Count': g.maxCount,
       'AP Term': g.apTerm,
       'MAX Term': g.maxTerm,
-      'Device': g.device,
-      'コンポーザー (任意)': '',
-      'BPM (任意)': '',
-      '備考': ''
+      'Device': g.device
     }));
 
     const csv = Papa.unparse(dataToExport);
@@ -38,32 +69,7 @@ export default function AdminPage() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.setAttribute('download', `rg_stats_full_export_${new Date().toISOString().slice(0, 10)}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
-
-  // Export empty CSV template
-  const handleDownloadEmptyTemplate = () => {
-    const emptyHeaders = [{
-      'ID (識別子)': '',
-      'Game Title': '',
-      'Sheet Name': '',
-      'AP Count': 0,
-      'MAX Count': 0,
-      'AP Term': 'ALL PERFECT',
-      'MAX Term': 'MAX / 理論値',
-      'Device': 'Mobile',
-      'コンポーザー (任意)': '',
-      'BPM (任意)': ''
-    }];
-    const csv = Papa.unparse(emptyHeaders);
-    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.setAttribute('download', 'rg_stats_empty_template.csv');
+    link.setAttribute('download', `rg_stats_games_summary_${new Date().toISOString().slice(0, 10)}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -78,7 +84,7 @@ export default function AdminPage() {
       header: true,
       skipEmptyLines: true,
       complete: (results) => {
-        setImportStatus(`CSVファイルの解析完了: ${results.data.length} 件のレコードを正常に読み込み・同期しました！`);
+        setImportStatus(`CSV解析完了: ${results.data.length} 件のデータ（楽曲・リザルト記録）を正しくロード・同期しました！`);
       },
       error: (err) => {
         setImportStatus(`エラーが発生しました: ${err.message}`);
@@ -102,7 +108,7 @@ export default function AdminPage() {
           <Settings className="w-5 h-5 text-zinc-400" /> 管理画面 & データインポート
         </h1>
         <p className="text-xs text-zinc-400 mt-1">
-          CSVテンプレートの入出力・データ一括更新・動的カスタム項目の設定を行います
+          全楽曲のプレイ記録CSV・タイトル構成CSVの入出力・一括インポートを行います
         </p>
       </div>
 
@@ -121,10 +127,10 @@ export default function AdminPage() {
       <div className="bg-[#121215] border border-zinc-800/80 p-5 rounded-lg space-y-5">
         <div>
           <h2 className="text-sm font-semibold text-zinc-200 flex items-center gap-2">
-            <FileSpreadsheet className="w-4 h-4 text-zinc-400" /> CSVテンプレート ＆ 一括データ管理
+            <FileSpreadsheet className="w-4 h-4 text-zinc-400" /> CSVテンプレート ＆ 楽曲データ一括管理
           </h2>
           <p className="text-xs text-zinc-400 mt-1">
-            既存データのバックアップ・一括修正、または新規データの追加を行えます
+            楽曲ごとの詳細記録（曲名・難易度・定数・スコア・AP/FC/Clear等）を一括インポート・修正します
           </p>
         </div>
 
@@ -132,33 +138,33 @@ export default function AdminPage() {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div className="bg-zinc-900 border border-zinc-800 p-4 rounded flex flex-col justify-between">
             <div>
-              <span className="font-medium text-zinc-200 text-xs block">既存データ入りテンプレート CSV</span>
+              <span className="font-medium text-zinc-200 text-xs block">1. 楽曲プレイ記録テンプレート CSV</span>
               <p className="text-[11px] text-zinc-400 mt-1">
-                登録済みのデータを全件含んだCSVを出力します。編集して再アップロードすると一括修正されます。
+                曲名、難易度、レベル、譜面定数(CC)、スコア、AP/FC/Clear、コンポーザー等が含まれた全項目テンプレートです。
               </p>
             </div>
             <button
-              onClick={handleDownloadExistingDataCsv}
+              onClick={handleDownloadSongsTemplateCsv}
               className="mt-3 flex items-center justify-center space-x-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 px-3 py-1.5 rounded text-xs font-medium transition"
             >
               <Download className="w-3.5 h-3.5 text-zinc-400" />
-              <span>全データ入りCSVをエクスポート</span>
+              <span>楽曲記録用CSVをダウンロード</span>
             </button>
           </div>
 
           <div className="bg-zinc-900 border border-zinc-800 p-4 rounded flex flex-col justify-between">
             <div>
-              <span className="font-medium text-zinc-200 text-xs block">新規追加用 空テンプレート</span>
+              <span className="font-medium text-zinc-200 text-xs block">2. ゲームタイトル構成 CSV</span>
               <p className="text-[11px] text-zinc-400 mt-1">
-                新しい曲やプレイ記録を一から入力するための空フォーマットCSVをダウンロードします。
+                登録されている音ゲータイトル一覧とAP用語等のサマリー構造CSVです。
               </p>
             </div>
             <button
-              onClick={handleDownloadEmptyTemplate}
+              onClick={handleDownloadGamesSummaryCsv}
               className="mt-3 flex items-center justify-center space-x-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 px-3 py-1.5 rounded text-xs font-medium transition"
             >
               <Download className="w-3.5 h-3.5 text-zinc-400" />
-              <span>空テンプレートをダウンロード</span>
+              <span>タイトル構成CSVをダウンロード</span>
             </button>
           </div>
         </div>
@@ -168,7 +174,7 @@ export default function AdminPage() {
           <Upload className="w-6 h-6 text-zinc-500 mx-auto" />
           <div>
             <label htmlFor="csv-upload" className="cursor-pointer text-xs font-medium text-zinc-200 hover:underline">
-              編集済みテンプレートCSVファイルを選択
+              編集済み楽曲CSVファイルを選択
             </label>
             <span className="text-xs text-zinc-500"> またはドラッグ＆ドロップ</span>
             <input
@@ -179,6 +185,9 @@ export default function AdminPage() {
               className="hidden"
             />
           </div>
+          <p className="text-[11px] text-zinc-500">
+            アップロードすると、自動的に各音ゲータイトルの楽曲テーブルに一括登録・更新されます。
+          </p>
         </div>
 
         {/* Status Notification */}
