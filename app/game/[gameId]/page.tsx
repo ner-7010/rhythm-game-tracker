@@ -11,10 +11,9 @@ import {
   getStoredCustomFields
 } from '@/lib/storage';
 import {
-  ArrowLeft, Search, Plus, FileEdit, CheckCircle2, X, Download, Upload, Trash2, Settings, PlusCircle, ArrowUp, ArrowDown, ArrowUpDown, Calculator, CircleDashed
+  ArrowLeft, Search, Plus, FileEdit, CheckCircle2, X, Download, Upload, Trash2, Settings, PlusCircle, ArrowUp, ArrowDown, ArrowUpDown, Calculator, CircleDashed, Award, Zap, ShieldCheck
 } from 'lucide-react';
 
-// Robust Integer Parser (removes commas and extra characters)
 const parseCleanInt = (val: any): number => {
   if (val === null || val === undefined || String(val).trim() === '') return 0;
   const cleanStr = String(val).replace(/,/g, '').replace(/[^\d-]/g, '');
@@ -22,7 +21,6 @@ const parseCleanInt = (val: any): number => {
   return isNaN(num) ? 0 : num;
 };
 
-// Robust Float Parser
 const parseCleanFloat = (val: any): number | undefined => {
   if (val === null || val === undefined || String(val).trim() === '') return undefined;
   const cleanStr = String(val).replace(/,/g, '').replace(/[^\d.-]/g, '');
@@ -30,7 +28,6 @@ const parseCleanFloat = (val: any): number | undefined => {
   return isNaN(num) ? undefined : num;
 };
 
-// Safe Math Formula Evaluator
 const evaluateFormula = (formula: string, notesVal: number, scoreVal: number): number | undefined => {
   if (!formula || !formula.trim()) return undefined;
   try {
@@ -101,15 +98,15 @@ export default function GameDetailPage() {
   ];
 
   const difficultyMasters = currentGame.difficultyMasters || [
-    { id: 'd1', name: 'MASTER', order: 1 },
-    { id: 'd2', name: 'EXPERT', order: 2 },
-    { id: 'd3', name: 'ADVANCED', order: 3 },
-    { id: 'd4', name: 'BASIC', order: 4 }
+    { id: 'd1', name: 'BYD', order: 1 },
+    { id: 'd2', name: 'FTR', order: 2 },
+    { id: 'd3', name: 'PRS', order: 3 },
+    { id: 'd4', name: 'PST', order: 4 }
   ];
 
   const [search, setSearch] = useState('');
   const [apFilter, setApFilter] = useState<'All' | 'Unplayed' | 'Played' | 'AP' | 'MAX'>('All');
-  const [sortBy, setSortBy] = useState<'default' | 'diffHigh' | 'diffLow' | 'levelHigh' | 'scoreHigh'>('default');
+  const [sortBy, setSortBy] = useState<'default' | 'titleAsc' | 'diffHigh' | 'diffLow' | 'levelHigh' | 'scoreHigh'>('default');
 
   // Record Modal State
   const [isRecordModalOpen, setIsRecordModalOpen] = useState(false);
@@ -193,16 +190,11 @@ export default function GameDetailPage() {
     setIsRecordModalOpen(true);
   };
 
-  // Flexible Grade Category Resolver (handles abbreviations like PM, FR, C, TL)
   const calculateFlagsFromGrade = (gradeName: string) => {
     const trimmed = String(gradeName || '').trim();
-    
-    // Check direct gradeMasters match
     let matchedGrade = gradeMasters.find(g => g.name.toLowerCase() === trimmed.toLowerCase());
-    
     let category: GradeCategory = matchedGrade ? matchedGrade.category : 'Unplayed';
 
-    // Abbreviations fallback
     if (!matchedGrade) {
       if (trimmed === 'PM' || trimmed.includes('理論値') || trimmed.includes('MAX')) category = 'MAX';
       else if (trimmed === 'AP' || trimmed.includes('Pure Memory')) category = 'AP';
@@ -373,7 +365,7 @@ export default function GameDetailPage() {
     document.body.removeChild(link);
   };
 
-  // Import CSV with ROBUST COMMA CLEANING
+  // Import CSV
   const handleImportSongsCsv = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -391,7 +383,6 @@ export default function GameDetailPage() {
           
           const { isPlayed, isMax, isAp, isFc, isClear } = calculateFlagsFromGrade(gName);
 
-          // ROBUST NUMBER CLEANING FOR COMMAS (e.g., "9,854,120" -> 9854120, "10,000,469" -> 10000469)
           const notesVal = row['Notes (ノーツ数)'] !== undefined && String(row['Notes (ノーツ数)']).trim() !== ''
             ? parseCleanInt(row['Notes (ノーツ数)'])
             : undefined;
@@ -450,6 +441,7 @@ export default function GameDetailPage() {
     return matchesSearch && matchesStatus;
   });
 
+  // Default Sort Order: 1. Song Title (Japanese / Alphabet) -> 2. Difficulty Master Order (BYD -> FTR -> PRS -> PST)
   const sortedRecords = [...filteredRecords].sort((a, b) => {
     if (sortBy === 'diffHigh') {
       const orderA = difficultyMasters.find(d => d.name === a.difficulty)?.order ?? 99;
@@ -467,13 +459,22 @@ export default function GameDetailPage() {
     if (sortBy === 'scoreHigh') {
       return b.score - a.score;
     }
-    return 0;
+
+    // Default & titleAsc: Sort by Song Title FIRST, then by Difficulty Master Order SECOND
+    const titleCompare = a.songTitle.localeCompare(b.songTitle, 'ja', { numeric: true });
+    if (titleCompare !== 0) return titleCompare;
+
+    const orderA = difficultyMasters.find(d => d.name === a.difficulty)?.order ?? 99;
+    const orderB = difficultyMasters.find(d => d.name === b.difficulty)?.order ?? 99;
+    return orderA - orderB;
   });
 
   const playedRecords = currentGameRecords.filter(r => r.isPlayed);
   const unplayedRecords = currentGameRecords.filter(r => !r.isPlayed);
-  const currentApCount = playedRecords.filter(r => r.isAp).length;
   const currentMaxCount = playedRecords.filter(r => r.isMax).length;
+  const currentApCount = playedRecords.filter(r => r.isAp).length;
+  const currentFcCount = playedRecords.filter(r => r.isFc).length;
+  const currentClearCount = playedRecords.filter(r => r.isClear).length;
 
   return (
     <div className="space-y-6">
@@ -485,8 +486,8 @@ export default function GameDetailPage() {
         </Link>
       </div>
 
-      {/* Game Header Banner */}
-      <div className="bg-[#121215] border border-zinc-800/80 p-5 rounded-lg flex flex-col md:flex-row md:items-center justify-between gap-4">
+      {/* Game Header Banner with 4 Counts (Clear, FC, AP, MAX) */}
+      <div className="bg-[#121215] border border-zinc-800/80 p-5 rounded-lg flex flex-col lg:flex-row lg:items-center justify-between gap-4">
         <div>
           <div className="flex items-center space-x-2">
             <span className="text-[10px] font-medium px-2 py-0.5 rounded bg-zinc-900 text-zinc-400 border border-zinc-800">
@@ -504,15 +505,26 @@ export default function GameDetailPage() {
           </p>
         </div>
 
-        {/* Stats & Settings button */}
-        <div className="flex items-center space-x-3">
-          <div className="bg-zinc-900 border border-zinc-800 px-3 py-1.5 rounded text-center">
-            <span className="text-[10px] text-zinc-500 block truncate">{currentGame.apTerm}</span>
-            <span className="text-lg font-bold text-emerald-400 num-tabular">{currentApCount.toLocaleString()}</span>
+        {/* Stats Cards: Clear, FC, AP, MAX */}
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+          <div className="bg-zinc-900 border border-zinc-800 px-3 py-1.5 rounded text-center min-w-[70px]">
+            <span className="text-[10px] text-zinc-500 block truncate">Clear</span>
+            <span className="text-base font-bold text-amber-400 num-tabular">{currentClearCount.toLocaleString()}</span>
           </div>
-          <div className="bg-zinc-900 border border-zinc-800 px-3 py-1.5 rounded text-center">
+
+          <div className="bg-zinc-900 border border-zinc-800 px-3 py-1.5 rounded text-center min-w-[70px]">
+            <span className="text-[10px] text-zinc-500 block truncate">{currentGame.fcTerm || 'Full Combo'}</span>
+            <span className="text-base font-bold text-purple-400 num-tabular">{currentFcCount.toLocaleString()}</span>
+          </div>
+
+          <div className="bg-zinc-900 border border-zinc-800 px-3 py-1.5 rounded text-center min-w-[70px]">
+            <span className="text-[10px] text-zinc-500 block truncate">{currentGame.apTerm}</span>
+            <span className="text-base font-bold text-emerald-400 num-tabular">{currentApCount.toLocaleString()}</span>
+          </div>
+
+          <div className="bg-zinc-900 border border-zinc-800 px-3 py-1.5 rounded text-center min-w-[70px]">
             <span className="text-[10px] text-zinc-500 block truncate">{currentGame.maxTerm}</span>
-            <span className="text-lg font-bold text-sky-400 num-tabular">{currentMaxCount.toLocaleString()}</span>
+            <span className="text-base font-bold text-sky-400 num-tabular">{currentMaxCount.toLocaleString()}</span>
           </div>
 
           <button
@@ -521,7 +533,7 @@ export default function GameDetailPage() {
             className="flex items-center space-x-1 bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-800 px-3 py-2 rounded text-xs transition"
           >
             <Settings className="w-3.5 h-3.5 text-zinc-400" />
-            <span>機種マスター設定</span>
+            <span>機種設定</span>
           </button>
         </div>
       </div>
@@ -561,7 +573,7 @@ export default function GameDetailPage() {
               onChange={(e) => setSortBy(e.target.value as any)}
               className="bg-transparent text-zinc-300 focus:outline-none"
             >
-              <option value="default">登録順 (標準)</option>
+              <option value="default">曲名順 ➔ 難易度順 (標準)</option>
               <option value="diffHigh">難易度高い順</option>
               <option value="diffLow">難易度低い順</option>
               <option value="levelHigh">譜面定数 / Level高い順</option>
@@ -606,93 +618,89 @@ export default function GameDetailPage() {
         </div>
       </div>
 
-      {/* Detailed Play Records Table */}
+      {/* Detailed Play Records Table (Pure Memory / AP Column REMOVED) */}
       <div className="bg-[#121215] border border-zinc-800/80 rounded-lg overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs">
+          <table className="w-full text-left text-xs border-collapse">
             <thead className="bg-zinc-900/80 text-zinc-400 border-b border-zinc-800 font-medium uppercase text-[10px]">
               <tr>
-                <th className="py-2.5 px-4">No.</th>
-                <th className="py-2.5 px-4">楽曲タイトル</th>
-                <th className="py-2.5 px-3">難易度</th>
-                <th className="py-2.5 px-3">Level</th>
-                <th className="py-2.5 px-3">譜面定数</th>
-                <th className="py-2.5 px-3">Notes</th>
-                <th className="py-2.5 px-4">Score</th>
-                <th className="py-2.5 px-3">Grade</th>
-                <th className="py-2.5 px-3">MAX-</th>
-                <th className="py-2.5 px-3 text-center">{currentGame.apTerm}</th>
-                <th className="py-2.5 px-4">詳細属性</th>
-                <th className="py-2.5 px-3 text-right">操作</th>
+                <th className="py-3 px-4 align-middle">No.</th>
+                <th className="py-3 px-4 align-middle">楽曲タイトル</th>
+                <th className="py-3 px-3 align-middle">難易度</th>
+                <th className="py-3 px-3 align-middle">Level</th>
+                <th className="py-3 px-3 align-middle">譜面定数</th>
+                <th className="py-3 px-3 align-middle">Notes</th>
+                <th className="py-3 px-4 align-middle">Score</th>
+                <th className="py-3 px-3 align-middle">Grade</th>
+                <th className="py-3 px-3 align-middle">MAX-</th>
+                <th className="py-3 px-4 align-middle">詳細属性</th>
+                <th className="py-3 px-3 text-right align-middle">操作</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-zinc-800/60 text-zinc-300">
               {sortedRecords.length === 0 ? (
                 <tr>
-                  <td colSpan={12} className="py-8 text-center text-zinc-500">
+                  <td colSpan={11} className="py-8 text-center text-zinc-500">
                     対象の曲が見つかりません。「新しいプレイ記録を追加」ボタン、または「CSV置換取込」からデータを入れてください。
                   </td>
                 </tr>
               ) : (
                 sortedRecords.map((rec, index) => (
                   <tr key={rec.id} className={`transition-colors ${!rec.isPlayed ? 'bg-zinc-950/40 text-zinc-500' : 'hover:bg-zinc-900/40'}`}>
-                    <td className="py-2.5 px-4 font-mono text-zinc-500 num-tabular">{index + 1}</td>
-                    <td className="py-2.5 px-4 font-bold text-zinc-100 flex items-center gap-1.5">
-                      {!rec.isPlayed && (
-                        <span title="未プレイ">
-                          <CircleDashed className="w-3 h-3 text-zinc-600 flex-shrink-0" />
-                        </span>
-                      )}
-                      <span>{rec.songTitle}</span>
+                    <td className="py-3 px-4 font-mono text-zinc-500 num-tabular align-middle">{index + 1}</td>
+                    <td className="py-3 px-4 font-bold text-zinc-100 align-middle">
+                      <div className="flex items-center gap-1.5 h-full">
+                        {!rec.isPlayed && (
+                          <span title="未プレイ" className="flex-shrink-0 inline-flex items-center">
+                            <CircleDashed className="w-3.5 h-3.5 text-zinc-600" />
+                          </span>
+                        )}
+                        <span className="leading-tight">{rec.songTitle}</span>
+                      </div>
                     </td>
-                    <td className="py-2.5 px-3">
-                      <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-zinc-900 text-zinc-200 border border-zinc-800">
+                    <td className="py-3 px-3 align-middle">
+                      <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-zinc-900 text-zinc-200 border border-zinc-800 inline-block">
                         {rec.difficulty}
                       </span>
                     </td>
-                    <td className="py-2.5 px-3 font-mono font-semibold text-zinc-300 num-tabular">{rec.level}</td>
-                    <td className="py-2.5 px-3 font-mono text-zinc-400 num-tabular">{rec.constantChart ?? '-'}</td>
-                    <td className="py-2.5 px-3 font-mono text-zinc-400 num-tabular">{rec.notes ? rec.notes.toLocaleString() : '-'}</td>
-                    <td className="py-2.5 px-4 font-mono font-bold text-zinc-100 num-tabular">
+                    <td className="py-3 px-3 font-mono font-semibold text-zinc-300 num-tabular align-middle">{rec.level}</td>
+                    <td className="py-3 px-3 font-mono text-zinc-400 num-tabular align-middle">{rec.constantChart ?? '-'}</td>
+                    <td className="py-3 px-3 font-mono text-zinc-400 num-tabular align-middle">{rec.notes ? rec.notes.toLocaleString() : '-'}</td>
+                    <td className="py-3 px-4 font-mono font-bold text-zinc-100 num-tabular align-middle">
                       {rec.isPlayed && rec.score ? rec.score.toLocaleString() : <span className="text-zinc-600 font-normal">未入力</span>}
                     </td>
-                    <td className="py-2.5 px-3">
-                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                    <td className="py-3 px-3 align-middle">
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold inline-block ${
                         !rec.isPlayed ? 'bg-zinc-900 text-zinc-600 border border-zinc-800' : 'bg-zinc-800 text-zinc-200 border border-zinc-700'
                       }`}>
                         {rec.grade || '未プレイ'}
                       </span>
                     </td>
-                    <td className="py-2.5 px-3 font-mono text-zinc-400 num-tabular">{rec.isPlayed && rec.maxMinus !== undefined ? `-${rec.maxMinus}` : '-'}</td>
-                    <td className="py-2.5 px-3 text-center">
-                      {rec.isAp ? (
-                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] bg-zinc-800 text-zinc-200 border border-zinc-700">
-                          <CheckCircle2 className="w-3 h-3 mr-1 text-zinc-400" /> AP
-                        </span>
-                      ) : (
-                        <span className="text-zinc-600">-</span>
-                      )}
+                    <td className="py-3 px-3 font-mono text-zinc-400 num-tabular align-middle">{rec.isPlayed && rec.maxMinus !== undefined ? `-${rec.maxMinus}` : '-'}</td>
+                    <td className="py-3 px-4 text-zinc-400 truncate max-w-xs align-middle">
+                      <div className="flex items-center space-x-1.5 truncate">
+                        {Object.entries(rec.customAttributes || {}).map(([k, v]) => (
+                          v ? <span key={k} className="text-[11px] bg-zinc-900 border border-zinc-800 px-1.5 py-0.5 rounded text-zinc-400 flex-shrink-0">{k}: {String(v)}</span> : null
+                        ))}
+                      </div>
                     </td>
-                    <td className="py-2.5 px-4 text-zinc-400 truncate max-w-xs space-x-1.5">
-                      {Object.entries(rec.customAttributes || {}).map(([k, v]) => (
-                        v ? <span key={k} className="text-[11px] bg-zinc-900 border border-zinc-800 px-1.5 py-0.5 rounded text-zinc-400">{k}: {String(v)}</span> : null
-                      ))}
-                    </td>
-                    <td className="py-2.5 px-3 text-right space-x-1">
-                      <button
-                        onClick={() => handleOpenEditModal(rec)}
-                        className="text-zinc-400 hover:text-zinc-100 p-1 transition"
-                        title="編集 (スコア入力)"
-                      >
-                        <FileEdit className="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        onClick={() => handleDeleteRecord(rec.id)}
-                        className="text-zinc-600 hover:text-rose-400 p-1 transition"
-                        title="削除"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
+                    <td className="py-3 px-3 text-right align-middle">
+                      <div className="flex items-center justify-end space-x-1">
+                        <button
+                          onClick={() => handleOpenEditModal(rec)}
+                          className="text-zinc-400 hover:text-zinc-100 p-1 transition"
+                          title="編集 (スコア入力)"
+                        >
+                          <FileEdit className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={() => handleDeleteRecord(rec.id)}
+                          className="text-zinc-600 hover:text-rose-400 p-1 transition"
+                          title="削除"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))

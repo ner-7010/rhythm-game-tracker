@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { GameTitle, PlayRecord } from '@/lib/types';
 import { getStoredGames, saveStoredGames, getStoredRecords } from '@/lib/storage';
-import { Award, Zap, Gamepad2, TrendingUp, Calendar, ChevronRight, Search, Plus, X, BarChart2, Layers } from 'lucide-react';
+import { Award, Zap, Gamepad2, TrendingUp, Calendar, ChevronRight, Search, Plus, X, BarChart2, Layers, CheckCircle2, ShieldAlert } from 'lucide-react';
 import { ResponsiveContainer, AreaChart, Area, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, Legend } from 'recharts';
 
 export default function DashboardPage() {
@@ -47,6 +47,9 @@ export default function DashboardPage() {
     };
   });
 
+  const playedRecords = records.filter(r => r.isPlayed);
+  const totalClear = playedRecords.filter(r => r.isClear).length;
+  const totalFc = playedRecords.filter(r => r.isFc).length;
   const totalAp = gamesWithLiveCounts.reduce((acc, g) => acc + g.apCount, 0);
   const totalMax = gamesWithLiveCounts.reduce((acc, g) => acc + g.maxCount, 0);
 
@@ -96,10 +99,6 @@ export default function DashboardPage() {
     setIsModalOpen(false);
   };
 
-  // Calculate History Stacked Data (ONLY PLAYED RECORDS)
-  const playedRecords = records.filter(r => r.isPlayed);
-  
-  // Single or Filtered Records
   const targetRecords = chartMode === 'singleGame'
     ? playedRecords.filter(r => r.gameId === selectedGameId)
     : playedRecords;
@@ -115,7 +114,6 @@ export default function DashboardPage() {
     { date: '現在', maxCount: totalMaxRecords, apCount: totalApRecords, fcCount: totalFcRecords, clearCount: totalClearRecords, failedCount: totalFailedRecords }
   ];
 
-  // Game Comparison Chart Data (Per Game Title)
   const gameComparisonData = [
     {
       date: '現在',
@@ -129,15 +127,14 @@ export default function DashboardPage() {
   ];
 
   const gameColors = [
-    { border: '#38bdf8', fill: '#0284c7' }, // Blue
-    { border: '#34d399', fill: '#059669' }, // Green
-    { border: '#fbbf24', fill: '#d97706' }, // Amber
-    { border: '#c084fc', fill: '#9333ea' }, // Purple
-    { border: '#f43f5e', fill: '#e11d48' }, // Rose
-    { border: '#2dd4bf', fill: '#0d9488' }, // Teal
+    { border: '#38bdf8', fill: '#0284c7' },
+    { border: '#34d399', fill: '#059669' },
+    { border: '#fbbf24', fill: '#d97706' },
+    { border: '#c084fc', fill: '#9333ea' },
+    { border: '#f43f5e', fill: '#e11d48' },
+    { border: '#2dd4bf', fill: '#0d9488' },
   ];
 
-  // Custom Tooltip for Stacked Chart
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
       const max = payload.find((p: any) => p.dataKey === 'maxCount')?.value || 0;
@@ -204,8 +201,34 @@ export default function DashboardPage() {
         </button>
       </div>
 
-      {/* Top Stat Cards Grid */}
+      {/* Top Stat Cards Grid (Clear, FC, AP, MAX) */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="bg-[#121215] border border-zinc-800/80 p-4 rounded-lg">
+          <div className="flex items-center justify-between text-zinc-400 text-xs font-medium">
+            <span>総 Clear 達成数</span>
+            <CheckCircle2 className="w-4 h-4 text-amber-400" />
+          </div>
+          <div className="mt-2 flex items-baseline justify-between">
+            <span className="text-2xl font-bold text-amber-400 num-tabular">
+              {totalClear.toLocaleString()}
+            </span>
+          </div>
+          <span className="text-[11px] text-zinc-500 mt-1 block">全 {games.length} 機種合計</span>
+        </div>
+
+        <div className="bg-[#121215] border border-zinc-800/80 p-4 rounded-lg">
+          <div className="flex items-center justify-between text-zinc-400 text-xs font-medium">
+            <span>総 FC 達成数</span>
+            <CheckCircle2 className="w-4 h-4 text-purple-400" />
+          </div>
+          <div className="mt-2 flex items-baseline justify-between">
+            <span className="text-2xl font-bold text-purple-400 num-tabular">
+              {totalFc.toLocaleString()}
+            </span>
+          </div>
+          <span className="text-[11px] text-zinc-500 mt-1 block">Full Combo達成</span>
+        </div>
+
         <div className="bg-[#121215] border border-zinc-800/80 p-4 rounded-lg">
           <div className="flex items-center justify-between text-zinc-400 text-xs font-medium">
             <span>総 AP 達成数</span>
@@ -216,7 +239,7 @@ export default function DashboardPage() {
               {totalAp.toLocaleString()}
             </span>
           </div>
-          <span className="text-[11px] text-zinc-500 mt-1 block">全 {games.length} 機種</span>
+          <span className="text-[11px] text-zinc-500 mt-1 block">All Perfect達成</span>
         </div>
 
         <div className="bg-[#121215] border border-zinc-800/80 p-4 rounded-lg">
@@ -230,32 +253,6 @@ export default function DashboardPage() {
             </span>
           </div>
           <span className="text-[11px] text-zinc-500 mt-1 block">理論値達成</span>
-        </div>
-
-        <div className="bg-[#121215] border border-zinc-800/80 p-4 rounded-lg">
-          <div className="flex items-center justify-between text-zinc-400 text-xs font-medium">
-            <span>登録機種数</span>
-            <Gamepad2 className="w-4 h-4 text-zinc-400" />
-          </div>
-          <div className="mt-2">
-            <span className="text-2xl font-bold text-zinc-100 num-tabular">
-              {games.length} <span className="text-xs font-normal text-zinc-400">機種</span>
-            </span>
-          </div>
-          <span className="text-[11px] text-zinc-500 mt-1 block">管理中のタイトル</span>
-        </div>
-
-        <div className="bg-[#121215] border border-zinc-800/80 p-4 rounded-lg">
-          <div className="flex items-center justify-between text-zinc-400 text-xs font-medium">
-            <span>既プレイ曲数</span>
-            <Calendar className="w-4 h-4 text-zinc-400" />
-          </div>
-          <div className="mt-2">
-            <span className="text-2xl font-bold text-zinc-200 num-tabular">
-              {playedRecords.length} <span className="text-xs font-normal text-zinc-400">曲</span>
-            </span>
-          </div>
-          <span className="text-[11px] text-zinc-500 mt-1 block">全 {records.length} 枠中</span>
         </div>
       </div>
 
@@ -273,9 +270,7 @@ export default function DashboardPage() {
             </p>
           </div>
           
-          {/* Chart Controls & View Switcher */}
           <div className="flex flex-wrap items-center gap-2 text-xs">
-            {/* Chart Mode Switcher */}
             <div className="flex bg-zinc-900 border border-zinc-800 rounded p-0.5">
               <button
                 onClick={() => setChartMode('stacked')}
@@ -306,7 +301,6 @@ export default function DashboardPage() {
               </button>
             </div>
 
-            {/* Single Game Selector */}
             {chartMode === 'singleGame' && (
               <select
                 value={selectedGameId}
@@ -319,7 +313,6 @@ export default function DashboardPage() {
               </select>
             )}
 
-            {/* Period Tabs */}
             <div className="flex items-center space-x-1 bg-zinc-900/80 p-0.5 rounded border border-zinc-800">
               {(['week', 'month', 'year'] as const).map(p => (
                 <button
@@ -336,11 +329,9 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Dynamic Chart Display */}
         <div className="h-64 w-full pt-2">
           <ResponsiveContainer width="100%" height="100%">
             {chartMode === 'gameComparison' ? (
-              /* Game Comparison Line Chart */
               <LineChart data={gameComparisonData} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="2 2" stroke="#27272a" />
                 <XAxis dataKey="date" stroke="#71717a" fontSize={11} tickLine={false} />
@@ -360,7 +351,6 @@ export default function DashboardPage() {
                 ))}
               </LineChart>
             ) : (
-              /* Stacked Area Chart (Pyramid with MAX line on Top, Elegant Multi-Color Palette) */
               <AreaChart data={chartHistoryData} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="2 2" stroke="#27272a" />
                 <XAxis dataKey="date" stroke="#71717a" fontSize={11} tickLine={false} />
@@ -377,15 +367,10 @@ export default function DashboardPage() {
                     return value;
                   }}
                 />
-                {/* 1. Base Layer: Failed (Slate/Grey) */}
                 <Area type="monotone" dataKey="failedCount" stackId="1" stroke="#64748b" fill="#334155" fillOpacity={0.4} strokeWidth={1.5} />
-                {/* 2. Clear Layer (Amber/Orange) */}
                 <Area type="monotone" dataKey="clearCount" stackId="1" stroke="#fbbf24" fill="#d97706" fillOpacity={0.4} strokeWidth={1.5} />
-                {/* 3. FC Layer (Purple/Violet) */}
                 <Area type="monotone" dataKey="fcCount" stackId="1" stroke="#c084fc" fill="#9333ea" fillOpacity={0.4} strokeWidth={1.5} />
-                {/* 4. AP Layer (Emerald/Green) */}
                 <Area type="monotone" dataKey="apCount" stackId="1" stroke="#34d399" fill="#059669" fillOpacity={0.5} strokeWidth={1.5} />
-                {/* 5. MAX Layer (Cyan/Blue Peak) */}
                 <Area type="monotone" dataKey="maxCount" stackId="1" stroke="#38bdf8" fill="#0284c7" fillOpacity={0.6} strokeWidth={2} />
               </AreaChart>
             )}
