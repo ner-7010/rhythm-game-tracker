@@ -4,14 +4,17 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { GameTitle, PlayRecord } from '@/lib/types';
 import { getStoredGames, saveStoredGames, getStoredRecords } from '@/lib/storage';
-import { Award, Zap, Gamepad2, TrendingUp, Calendar, ChevronRight, Search, Plus, X } from 'lucide-react';
-import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid, Legend } from 'recharts';
+import { Award, Zap, Gamepad2, TrendingUp, Calendar, ChevronRight, Search, Plus, X, BarChart2, Layers } from 'lucide-react';
+import { ResponsiveContainer, AreaChart, Area, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, Legend } from 'recharts';
 
 export default function DashboardPage() {
   const [games, setGames] = useState<GameTitle[]>([]);
   const [records, setRecords] = useState<PlayRecord[]>([]);
 
   const [period, setPeriod] = useState<'week' | 'month' | 'year'>('week');
+  const [chartMode, setChartMode] = useState<'stacked' | 'gameComparison' | 'singleGame'>('stacked');
+  const [selectedGameId, setSelectedGameId] = useState<string>('');
+
   const [filterDevice, setFilterDevice] = useState<'All' | 'Mobile' | 'Arcade'>('All');
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -27,6 +30,9 @@ export default function DashboardPage() {
     const loadedRecords = getStoredRecords();
     setGames(loadedGames);
     setRecords(loadedRecords);
+    if (loadedGames.length > 0 && !selectedGameId) {
+      setSelectedGameId(loadedGames[0].id);
+    }
   }, []);
 
   // Compute live game counts based on actual played records
@@ -85,31 +91,63 @@ export default function DashboardPage() {
     setGames(updated);
     saveStoredGames(updated);
 
+    if (!selectedGameId) setSelectedGameId(id);
     setNewGameName('');
     setIsModalOpen(false);
   };
 
   // Calculate History Stacked Data (ONLY PLAYED RECORDS)
   const playedRecords = records.filter(r => r.isPlayed);
-  const totalApRecords = playedRecords.filter(r => r.isAp).length;
-  const totalFcRecords = playedRecords.filter(r => r.isFc && !r.isAp).length;
-  const totalClearRecords = playedRecords.filter(r => r.isClear && !r.isFc && !r.isAp).length;
-  const totalFailedRecords = playedRecords.filter(r => !r.isClear).length;
+  
+  // Single or Filtered Records
+  const targetRecords = chartMode === 'singleGame'
+    ? playedRecords.filter(r => r.gameId === selectedGameId)
+    : playedRecords;
+
+  const totalMaxRecords = targetRecords.filter(r => r.isMax).length;
+  const totalApRecords = targetRecords.filter(r => r.isAp && !r.isMax).length;
+  const totalFcRecords = targetRecords.filter(r => r.isFc && !r.isAp && !r.isMax).length;
+  const totalClearRecords = targetRecords.filter(r => r.isClear && !r.isFc && !r.isAp && !r.isMax).length;
+  const totalFailedRecords = targetRecords.filter(r => !r.isClear).length;
 
   const chartHistoryData = [
-    { date: '過去', apCount: 0, fcCount: 0, clearCount: 0, failedCount: 0 },
-    { date: '現在', apCount: totalApRecords, fcCount: totalFcRecords, clearCount: totalClearRecords, failedCount: totalFailedRecords }
+    { date: '過去', maxCount: 0, apCount: 0, fcCount: 0, clearCount: 0, failedCount: 0 },
+    { date: '現在', maxCount: totalMaxRecords, apCount: totalApRecords, fcCount: totalFcRecords, clearCount: totalClearRecords, failedCount: totalFailedRecords }
+  ];
+
+  // Game Comparison Chart Data (Per Game Title)
+  const gameComparisonData = [
+    {
+      date: '現在',
+      ...games.reduce((acc, g) => {
+        const gPlayed = records.filter(r => r.gameId === g.id && r.isPlayed);
+        acc[`${g.id}_ap`] = gPlayed.filter(r => r.isAp).length;
+        acc[`${g.id}_max`] = gPlayed.filter(r => r.isMax).length;
+        return acc;
+      }, {} as Record<string, number>)
+    }
+  ];
+
+  const gameColors = [
+    { border: '#38bdf8', fill: '#0284c7' }, // Blue
+    { border: '#34d399', fill: '#059669' }, // Green
+    { border: '#fbbf24', fill: '#d97706' }, // Amber
+    { border: '#c084fc', fill: '#9333ea' }, // Purple
+    { border: '#f43f5e', fill: '#e11d48' }, // Rose
+    { border: '#2dd4bf', fill: '#0d9488' }, // Teal
   ];
 
   // Custom Tooltip for Stacked Chart
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
+      const max = payload.find((p: any) => p.dataKey === 'maxCount')?.value || 0;
       const ap = payload.find((p: any) => p.dataKey === 'apCount')?.value || 0;
       const fc = payload.find((p: any) => p.dataKey === 'fcCount')?.value || 0;
       const clear = payload.find((p: any) => p.dataKey === 'clearCount')?.value || 0;
       const failed = payload.find((p: any) => p.dataKey === 'failedCount')?.value || 0;
 
-      const totalFc = ap + fc;
+      const totalAp = max + ap;
+      const totalFc = totalAp + fc;
       const totalClear = totalFc + clear;
       const totalPlayed = totalClear + failed;
 
@@ -117,19 +155,23 @@ export default function DashboardPage() {
         <div className="bg-[#18181b] border border-zinc-700 p-3 rounded text-xs space-y-1.5 shadow-xl">
           <p className="font-bold text-zinc-200 border-b border-zinc-800 pb-1">{label}</p>
           <div className="space-y-1 font-mono text-[11px]">
-            <div className="flex justify-between space-x-4 text-zinc-100 font-bold">
-              <span>▲ AP (最頂点):</span>
-              <span>{ap} 曲</span>
+            <div className="flex justify-between space-x-4 text-sky-400 font-bold">
+              <span>★ MAX (理論値/頂点):</span>
+              <span>{max} 曲</span>
             </div>
-            <div className="flex justify-between space-x-4 text-zinc-300">
+            <div className="flex justify-between space-x-4 text-emerald-400 font-bold">
+              <span>▲ MAX + AP 累積:</span>
+              <span>{totalAp} 曲</span>
+            </div>
+            <div className="flex justify-between space-x-4 text-purple-300">
               <span>AP + FC 累積:</span>
               <span>{totalFc} 曲</span>
             </div>
-            <div className="flex justify-between space-x-4 text-zinc-400">
-              <span>AP + FC + Clear 累積:</span>
+            <div className="flex justify-between space-x-4 text-amber-300">
+              <span>FC + Clear 累積:</span>
               <span>{totalClear} 曲</span>
             </div>
-            <div className="flex justify-between space-x-4 text-zinc-500">
+            <div className="flex justify-between space-x-4 text-slate-400">
               <span>■ 総既プレイ数 (土台):</span>
               <span>{totalPlayed} 曲</span>
             </div>
@@ -167,10 +209,10 @@ export default function DashboardPage() {
         <div className="bg-[#121215] border border-zinc-800/80 p-4 rounded-lg">
           <div className="flex items-center justify-between text-zinc-400 text-xs font-medium">
             <span>総 AP 達成数</span>
-            <Award className="w-4 h-4 text-zinc-400" />
+            <Award className="w-4 h-4 text-emerald-400" />
           </div>
           <div className="mt-2 flex items-baseline justify-between">
-            <span className="text-2xl font-bold text-zinc-100 num-tabular">
+            <span className="text-2xl font-bold text-emerald-400 num-tabular">
               {totalAp.toLocaleString()}
             </span>
           </div>
@@ -180,10 +222,10 @@ export default function DashboardPage() {
         <div className="bg-[#121215] border border-zinc-800/80 p-4 rounded-lg">
           <div className="flex items-center justify-between text-zinc-400 text-xs font-medium">
             <span>総 MAX / 理論値</span>
-            <Zap className="w-4 h-4 text-zinc-400" />
+            <Zap className="w-4 h-4 text-sky-400" />
           </div>
           <div className="mt-2 flex items-baseline justify-between">
-            <span className="text-2xl font-bold text-zinc-100 num-tabular">
+            <span className="text-2xl font-bold text-sky-400 num-tabular">
               {totalMax.toLocaleString()}
             </span>
           </div>
@@ -217,58 +259,136 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Growth Trend Graph Section - Stacked Area Chart (Pyramid Order: Failed at Bottom -> AP at Top) */}
+      {/* Growth Trend Graph Section */}
       <div className="bg-[#121215] border border-zinc-800/80 p-5 rounded-lg space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-zinc-800/80 pb-3">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-zinc-800/80 pb-3">
           <div>
             <h2 className="text-sm font-semibold text-zinc-200 flex items-center gap-2">
-              <TrendingUp className="w-4 h-4 text-zinc-400" /> 成長・リザルト累積推移 (ピラミッド積み上げ)
+              <TrendingUp className="w-4 h-4 text-zinc-400" /> 成長・リザルト累積推移
             </h2>
             <p className="text-[11px] text-zinc-500 mt-0.5">
-              下（土台）から「既プレイ(未Clear)」→「Clear」→「FC」→「AP(頂点)」の順に積み上げて表示
+              {chartMode === 'stacked' && '土台「既プレイ」→「Clear」→「FC」→「AP」→「MAX(頂点)」のシック色分けピラミッド'}
+              {chartMode === 'gameComparison' && '各音ゲータイトルごとの AP 達成曲数を比較'}
+              {chartMode === 'singleGame' && `${games.find(g => g.id === selectedGameId)?.name || ''} 専用のカテゴリ推移`}
             </p>
           </div>
           
-          {/* Period Selector Tabs */}
-          <div className="flex items-center space-x-1 bg-zinc-900/80 p-1 rounded border border-zinc-800 text-xs self-start sm:self-auto">
-            {(['week', 'month', 'year'] as const).map(p => (
+          {/* Chart Controls & View Switcher */}
+          <div className="flex flex-wrap items-center gap-2 text-xs">
+            {/* Chart Mode Switcher */}
+            <div className="flex bg-zinc-900 border border-zinc-800 rounded p-0.5">
               <button
-                key={p}
-                onClick={() => setPeriod(p)}
-                className={`px-3 py-1 rounded font-medium transition ${
-                  period === p ? 'bg-zinc-800 text-zinc-100' : 'text-zinc-400 hover:text-zinc-200'
+                onClick={() => setChartMode('stacked')}
+                className={`flex items-center space-x-1 px-2.5 py-1 rounded transition ${
+                  chartMode === 'stacked' ? 'bg-zinc-800 text-zinc-100 font-medium' : 'text-zinc-400 hover:text-zinc-200'
                 }`}
               >
-                {p === 'week' ? '週の差分' : p === 'month' ? '月の差分' : '年の差分'}
+                <Layers className="w-3 h-3" />
+                <span>総合ピラミッド</span>
               </button>
-            ))}
+              <button
+                onClick={() => setChartMode('gameComparison')}
+                className={`flex items-center space-x-1 px-2.5 py-1 rounded transition ${
+                  chartMode === 'gameComparison' ? 'bg-zinc-800 text-zinc-100 font-medium' : 'text-zinc-400 hover:text-zinc-200'
+                }`}
+              >
+                <BarChart2 className="w-3 h-3" />
+                <span>機種別比較</span>
+              </button>
+              <button
+                onClick={() => setChartMode('singleGame')}
+                className={`flex items-center space-x-1 px-2.5 py-1 rounded transition ${
+                  chartMode === 'singleGame' ? 'bg-zinc-800 text-zinc-100 font-medium' : 'text-zinc-400 hover:text-zinc-200'
+                }`}
+              >
+                <Gamepad2 className="w-3 h-3" />
+                <span>単一機種</span>
+              </button>
+            </div>
+
+            {/* Single Game Selector */}
+            {chartMode === 'singleGame' && (
+              <select
+                value={selectedGameId}
+                onChange={(e) => setSelectedGameId(e.target.value)}
+                className="bg-zinc-900 border border-zinc-800 text-zinc-200 rounded px-2.5 py-1 text-xs focus:outline-none"
+              >
+                {games.map(g => (
+                  <option key={g.id} value={g.id}>{g.name}</option>
+                ))}
+              </select>
+            )}
+
+            {/* Period Tabs */}
+            <div className="flex items-center space-x-1 bg-zinc-900/80 p-0.5 rounded border border-zinc-800">
+              {(['week', 'month', 'year'] as const).map(p => (
+                <button
+                  key={p}
+                  onClick={() => setPeriod(p)}
+                  className={`px-2.5 py-1 rounded font-medium transition ${
+                    period === p ? 'bg-zinc-800 text-zinc-100' : 'text-zinc-400 hover:text-zinc-200'
+                  }`}
+                >
+                  {p === 'week' ? '週' : p === 'month' ? '月' : '年'}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
 
-        {/* Stacked Quiet Area Chart (Reversed Order: failedCount -> clearCount -> fcCount -> apCount) */}
+        {/* Dynamic Chart Display */}
         <div className="h-64 w-full pt-2">
           <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={chartHistoryData} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="2 2" stroke="#27272a" />
-              <XAxis dataKey="date" stroke="#71717a" fontSize={11} tickLine={false} />
-              <YAxis stroke="#71717a" fontSize={11} tickLine={false} />
-              <Tooltip content={<CustomTooltip />} />
-              <Legend
-                wrapperStyle={{ fontSize: '11px', paddingTop: '10px' }}
-                formatter={(value) => {
-                  if (value === 'failedCount') return '既プレイ (未Clear含む / 土台)';
-                  if (value === 'clearCount') return 'Clear';
-                  if (value === 'fcCount') return 'FC';
-                  if (value === 'apCount') return 'AP (頂点)';
-                  return value;
-                }}
-              />
-              {/* Bottom (Base) to Top (Peak) */}
-              <Area type="monotone" dataKey="failedCount" stackId="1" stroke="#3f3f46" fill="#3f3f46" fillOpacity={0.3} />
-              <Area type="monotone" dataKey="clearCount" stackId="1" stroke="#71717a" fill="#71717a" fillOpacity={0.4} />
-              <Area type="monotone" dataKey="fcCount" stackId="1" stroke="#a1a1aa" fill="#a1a1aa" fillOpacity={0.6} />
-              <Area type="monotone" dataKey="apCount" stackId="1" stroke="#e4e4e7" fill="#e4e4e7" fillOpacity={0.8} />
-            </AreaChart>
+            {chartMode === 'gameComparison' ? (
+              /* Game Comparison Line Chart */
+              <LineChart data={gameComparisonData} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="2 2" stroke="#27272a" />
+                <XAxis dataKey="date" stroke="#71717a" fontSize={11} tickLine={false} />
+                <YAxis stroke="#71717a" fontSize={11} tickLine={false} />
+                <Tooltip />
+                <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '10px' }} />
+                {games.map((g, idx) => (
+                  <Line
+                    key={g.id}
+                    type="monotone"
+                    dataKey={`${g.id}_ap`}
+                    name={`${g.name} (${g.apTerm})`}
+                    stroke={gameColors[idx % gameColors.length].border}
+                    strokeWidth={2}
+                    dot={{ r: 4 }}
+                  />
+                ))}
+              </LineChart>
+            ) : (
+              /* Stacked Area Chart (Pyramid with MAX line on Top, Elegant Multi-Color Palette) */
+              <AreaChart data={chartHistoryData} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="2 2" stroke="#27272a" />
+                <XAxis dataKey="date" stroke="#71717a" fontSize={11} tickLine={false} />
+                <YAxis stroke="#71717a" fontSize={11} tickLine={false} />
+                <Tooltip content={<CustomTooltip />} />
+                <Legend
+                  wrapperStyle={{ fontSize: '11px', paddingTop: '10px' }}
+                  formatter={(value) => {
+                    if (value === 'failedCount') return '既プレイ (未Clear含む / 土台)';
+                    if (value === 'clearCount') return 'Clear';
+                    if (value === 'fcCount') return 'FC';
+                    if (value === 'apCount') return 'AP';
+                    if (value === 'maxCount') return '★ MAX (理論値 / 最頂点)';
+                    return value;
+                  }}
+                />
+                {/* 1. Base Layer: Failed (Slate/Grey) */}
+                <Area type="monotone" dataKey="failedCount" stackId="1" stroke="#64748b" fill="#334155" fillOpacity={0.4} strokeWidth={1.5} />
+                {/* 2. Clear Layer (Amber/Orange) */}
+                <Area type="monotone" dataKey="clearCount" stackId="1" stroke="#fbbf24" fill="#d97706" fillOpacity={0.4} strokeWidth={1.5} />
+                {/* 3. FC Layer (Purple/Violet) */}
+                <Area type="monotone" dataKey="fcCount" stackId="1" stroke="#c084fc" fill="#9333ea" fillOpacity={0.4} strokeWidth={1.5} />
+                {/* 4. AP Layer (Emerald/Green) */}
+                <Area type="monotone" dataKey="apCount" stackId="1" stroke="#34d399" fill="#059669" fillOpacity={0.5} strokeWidth={1.5} />
+                {/* 5. MAX Layer (Cyan/Blue Peak) */}
+                <Area type="monotone" dataKey="maxCount" stackId="1" stroke="#38bdf8" fill="#0284c7" fillOpacity={0.6} strokeWidth={2} />
+              </AreaChart>
+            )}
           </ResponsiveContainer>
         </div>
       </div>
@@ -338,7 +458,7 @@ export default function DashboardPage() {
                   <span className="text-[10px] text-zinc-400 block truncate" title={game.apTerm}>
                     {game.apTerm}
                   </span>
-                  <span className="font-bold text-zinc-200 text-sm num-tabular">
+                  <span className="font-bold text-emerald-400 text-sm num-tabular">
                     {game.apCount.toLocaleString()} <span className="text-[10px] font-normal text-zinc-500">曲</span>
                   </span>
                 </div>
@@ -346,7 +466,7 @@ export default function DashboardPage() {
                   <span className="text-[10px] text-zinc-400 block truncate" title={game.maxTerm}>
                     {game.maxTerm}
                   </span>
-                  <span className="font-bold text-zinc-300 text-sm num-tabular">
+                  <span className="font-bold text-sky-400 text-sm num-tabular">
                     {game.maxCount.toLocaleString()} <span className="text-[10px] font-normal text-zinc-500">曲</span>
                   </span>
                 </div>
