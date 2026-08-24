@@ -1,86 +1,215 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import Papa from 'papaparse';
-import { INITIAL_GAMES, MOCK_PLAY_RECORDS } from '@/lib/mockData';
-import { PlayRecord } from '@/lib/types';
-import { ArrowLeft, Search, Plus, FileEdit, CheckCircle2, X, Download, Upload, Trash2 } from 'lucide-react';
+import { PlayRecord, GameTitle, CustomFieldDefinition } from '@/lib/types';
+import {
+  getStoredGames, saveStoredGames,
+  getStoredRecords, saveStoredRecords,
+  getStoredCustomFields
+} from '@/lib/storage';
+import {
+  ArrowLeft, Search, Plus, FileEdit, CheckCircle2, X, Download, Upload, Trash2, Settings, PlusCircle
+} from 'lucide-react';
 
 export default function GameDetailPage() {
   const params = useParams();
   const gameId = params.gameId as string;
 
-  const game = INITIAL_GAMES.find(g => g.id === gameId) || INITIAL_GAMES[0];
+  // Games & Records loaded from localStorage for full persistence
+  const [games, setGames] = useState<GameTitle[]>([]);
+  const [records, setRecords] = useState<PlayRecord[]>([]);
+  const [customFields, setCustomFields] = useState<CustomFieldDefinition[]>([]);
 
-  const [records, setRecords] = useState<PlayRecord[]>(
-    MOCK_PLAY_RECORDS.filter(r => r.gameId === gameId)
-  );
+  // Load from localStorage on mount
+  useEffect(() => {
+    const loadedGames = getStoredGames();
+    const loadedRecords = getStoredRecords();
+    const loadedFields = getStoredCustomFields();
+
+    setGames(loadedGames);
+    setRecords(loadedRecords);
+    setCustomFields(loadedFields);
+  }, []);
+
+  const currentGame = games.find(g => g.id === gameId) || {
+    id: gameId,
+    name: gameId === 'arcaea' ? 'Arcaea' : gameId,
+    sheetName: `[${gameId}]`,
+    apCount: 0,
+    maxCount: 0,
+    apTerm: 'AP / Pure Memory',
+    maxTerm: 'MAX / 理論値',
+    device: 'Mobile' as const,
+    grades: ['Pure Memory (理論値)', 'Pure Memory', 'Full Recall', 'Track Complete', 'Track Lost']
+  };
+
+  const currentGrades = currentGame.grades || [
+    'Pure Memory (理論値)', 'Pure Memory', 'Full Recall', 'Track Complete', 'Track Lost',
+    'ALL PERFECT', 'ALL JUSTICE', 'SSS+', 'SSS', 'SS', 'S', 'Clear', 'Failed'
+  ];
 
   const [search, setSearch] = useState('');
   const [apFilter, setApFilter] = useState<'All' | 'AP' | 'MAX'>('All');
 
-  // Modal State for adding a new play record
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  // Record Modal State (for both Add & Edit)
+  const [isRecordModalOpen, setIsRecordModalOpen] = useState(false);
+  const [editingRecordId, setEditingRecordId] = useState<string | null>(null);
+
   const [songTitle, setSongTitle] = useState('');
   const [difficulty, setDifficulty] = useState('MASTER');
   const [level, setLevel] = useState('14');
   const [constantChart, setConstantChart] = useState<string>('');
   const [notes, setNotes] = useState<string>('');
   const [score, setScore] = useState<string>('');
-  const [grade, setGrade] = useState('AP');
+  const [grade, setGrade] = useState<string>(currentGrades[0] || 'Pure Memory');
   const [maxMinus, setMaxMinus] = useState<string>('');
   const [isAp, setIsAp] = useState(true);
   const [isFc, setIsFc] = useState(true);
   const [isClear, setIsClear] = useState(true);
   const [isMax, setIsMax] = useState(false);
-  const [composer, setComposer] = useState('');
-  const [bpm, setBpm] = useState('');
+  const [dynamicAttrs, setDynamicAttrs] = useState<Record<string, any>>({});
 
-  // Handle Add Play Record
-  const handleAddRecord = (e: React.FormEvent) => {
+  // Game Settings Modal State
+  const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
+  const [newGradeInput, setNewGradeInput] = useState('');
+  const [editedGrades, setEditedGrades] = useState<string[]>(currentGrades);
+
+  // Sync edited grades when game changes
+  useEffect(() => {
+    if (currentGame.grades) {
+      setEditedGrades(currentGame.grades);
+    }
+  }, [currentGame]);
+
+  // Open modal for NEW record
+  const handleOpenAddModal = () => {
+    setEditingRecordId(null);
+    setSongTitle('');
+    setDifficulty('MASTER');
+    setLevel('14');
+    setConstantChart('');
+    setNotes('');
+    setScore('');
+    setGrade(currentGrades[0] || 'Pure Memory');
+    setMaxMinus('');
+    setIsAp(true);
+    setIsFc(true);
+    setIsClear(true);
+    setIsMax(false);
+    setDynamicAttrs({});
+    setIsRecordModalOpen(true);
+  };
+
+  // Open modal for EDITING existing record
+  const handleOpenEditModal = (rec: PlayRecord) => {
+    setEditingRecordId(rec.id);
+    setSongTitle(rec.songTitle);
+    setDifficulty(rec.difficulty);
+    setLevel(rec.level);
+    setConstantChart(rec.constantChart !== undefined ? String(rec.constantChart) : '');
+    setNotes(rec.notes !== undefined ? String(rec.notes) : '');
+    setScore(String(rec.score));
+    setGrade(rec.grade);
+    setMaxMinus(rec.maxMinus !== undefined ? String(rec.maxMinus) : '');
+    setIsAp(rec.isAp);
+    setIsFc(rec.isFc);
+    setIsClear(rec.isClear);
+    setIsMax(rec.isMax);
+    setDynamicAttrs(rec.customAttributes || {});
+    setIsRecordModalOpen(true);
+  };
+
+  // Save (Create or Update) Record
+  const handleSaveRecord = (e: React.FormEvent) => {
     e.preventDefault();
     if (!songTitle.trim()) return;
 
-    const newRecord: PlayRecord = {
-      id: `rec-${Date.now()}`,
-      gameId,
-      songTitle,
-      difficulty,
-      level,
-      constantChart: constantChart ? parseFloat(constantChart) : undefined,
-      notes: notes ? parseInt(notes, 10) : undefined,
-      score: score ? parseInt(score, 10) : 0,
-      grade: grade || 'AP',
-      maxMinus: maxMinus !== '' ? parseInt(maxMinus, 10) : undefined,
-      isAp,
-      isFc: isAp || isFc,
-      isClear: isAp || isFc || isClear,
-      isMax,
-      playedAt: new Date().toISOString(),
-      customAttributes: {
-        composer: composer || undefined,
-        bpm: bpm ? parseInt(bpm, 10) : undefined
-      }
-    };
+    let updatedRecords: PlayRecord[];
 
-    setRecords([newRecord, ...records]);
-    setIsModalOpen(false);
+    if (editingRecordId) {
+      // UPDATE existing record
+      updatedRecords = records.map(r => {
+        if (r.id === editingRecordId) {
+          return {
+            ...r,
+            songTitle,
+            difficulty,
+            level,
+            constantChart: constantChart !== '' ? parseFloat(constantChart) : undefined,
+            notes: notes !== '' ? parseInt(notes, 10) : undefined,
+            score: score !== '' ? parseInt(score, 10) : 0,
+            grade,
+            maxMinus: maxMinus !== '' ? parseInt(maxMinus, 10) : undefined,
+            isAp,
+            isFc: isAp || isFc,
+            isClear: isAp || isFc || isClear,
+            isMax,
+            customAttributes: dynamicAttrs
+          };
+        }
+        return r;
+      });
+    } else {
+      // CREATE new record
+      const newRecord: PlayRecord = {
+        id: `rec-${Date.now()}`,
+        gameId,
+        songTitle,
+        difficulty,
+        level,
+        constantChart: constantChart !== '' ? parseFloat(constantChart) : undefined,
+        notes: notes !== '' ? parseInt(notes, 10) : undefined,
+        score: score !== '' ? parseInt(score, 10) : 0,
+        grade,
+        maxMinus: maxMinus !== '' ? parseInt(maxMinus, 10) : undefined,
+        isAp,
+        isFc: isAp || isFc,
+        isClear: isAp || isFc || isClear,
+        isMax,
+        playedAt: new Date().toISOString(),
+        customAttributes: dynamicAttrs
+      };
+      updatedRecords = [newRecord, ...records];
+    }
 
-    // Reset Form
-    setSongTitle('');
-    setScore('');
-    setMaxMinus('');
-    setComposer('');
-    setBpm('');
+    setRecords(updatedRecords);
+    saveStoredRecords(updatedRecords);
+    setIsRecordModalOpen(false);
   };
 
-  // Export current game's song play records to CSV
+  // Delete Record
+  const handleDeleteRecord = (id: string) => {
+    const updated = records.filter(r => r.id !== id);
+    setRecords(updated);
+    saveStoredRecords(updated);
+  };
+
+  // Save Game Grades Settings
+  const handleSaveGameSettings = () => {
+    const updatedGames = games.map(g => {
+      if (g.id === gameId) {
+        return {
+          ...g,
+          grades: editedGrades
+        };
+      }
+      return g;
+    });
+
+    setGames(updatedGames);
+    saveStoredGames(updatedGames);
+    setIsSettingsModalOpen(false);
+  };
+
+  // Export CSV
   const handleExportSongsCsv = () => {
-    const exportData = records.map(r => ({
+    const currentGameRecords = records.filter(r => r.gameId === gameId);
+    const exportData = currentGameRecords.map(r => ({
       'ID (識別子)': r.id,
-      'Game Title': game.name,
+      'Game Title': currentGame.name,
       'Song Title (曲名)': r.songTitle,
       'Difficulty (難易度)': r.difficulty,
       'Level (レベル)': r.level,
@@ -92,28 +221,29 @@ export default function GameDetailPage() {
       'is_AP (1:はい / 0:いいえ)': r.isAp ? 1 : 0,
       'is_FC (1:はい / 0:いいえ)': r.isFc ? 1 : 0,
       'is_Clear (1:はい / 0:いいえ)': r.isClear ? 1 : 0,
-      'Composer (コンポーザー)': r.customAttributes?.composer || '',
-      'BPM': r.customAttributes?.bpm || ''
+      'Composer (コンポーザー)': r.customAttributes?.['コンポーザー'] || r.customAttributes?.composer || '',
+      'BPM': r.customAttributes?.['BPM'] || r.customAttributes?.bpm || '',
+      '譜面制作者': r.customAttributes?.['譜面制作者'] || r.customAttributes?.notesDesigner || ''
     }));
 
-    // Add 1 sample row if empty so user gets headers
     if (exportData.length === 0) {
       exportData.push({
         'ID (識別子)': '',
-        'Game Title': game.name,
-        'Song Title (曲名)': 'サンプル曲名',
+        'Game Title': currentGame.name,
+        'Song Title (曲名)': 'サンプル曲',
         'Difficulty (難易度)': 'MASTER',
         'Level (レベル)': '14',
         'Constant Chart (譜面定数)': '14.5',
         'Notes (ノーツ数)': '2000',
         'Score (スコア)': 1000000,
-        'Grade (ランク)': 'AP',
+        'Grade (ランク)': currentGrades[0] || 'Pure Memory',
         'MAX- (失点)': '0',
         'is_AP (1:はい / 0:いいえ)': 1,
         'is_FC (1:はい / 0:いいえ)': 1,
         'is_Clear (1:はい / 0:いいえ)': 1,
         'Composer (コンポーザー)': '作曲者名',
-        'BPM': '200'
+        'BPM': '200',
+        '譜面制作者': '譜面制作者名'
       });
     }
 
@@ -122,13 +252,13 @@ export default function GameDetailPage() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.setAttribute('download', `${game.name}_play_records.csv`);
+    link.setAttribute('download', `${currentGame.name}_play_records.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
   };
 
-  // Import Song CSV for this game
+  // Import CSV
   const handleImportSongsCsv = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -138,7 +268,7 @@ export default function GameDetailPage() {
       skipEmptyLines: true,
       complete: (results) => {
         const importedRecords: PlayRecord[] = results.data.map((row: any, idx: number) => {
-          const isApVal = row['is_AP (1:はい / 0:いいえ)'] == 1 || String(row['Grade (ランク)']).toLowerCase().includes('ap') || String(row['Grade (ランク)']).toLowerCase().includes('pm');
+          const isApVal = row['is_AP (1:はい / 0:いいえ)'] == 1 || String(row['Grade (ランク)']).toLowerCase().includes('ap') || String(row['Grade (ランク)']).toLowerCase().includes('pure');
           return {
             id: row['ID (識別子)'] || `imp-${Date.now()}-${idx}`,
             gameId,
@@ -148,7 +278,7 @@ export default function GameDetailPage() {
             constantChart: row['Constant Chart (譜面定数)'] ? parseFloat(row['Constant Chart (譜面定数)']) : undefined,
             notes: row['Notes (ノーツ数)'] ? parseInt(row['Notes (ノーツ数)'], 10) : undefined,
             score: parseInt(row['Score (スコア)'] || row['score'] || '0', 10),
-            grade: row['Grade (ランク)'] || 'AP',
+            grade: row['Grade (ランク)'] || currentGrades[0] || 'Pure Memory',
             maxMinus: row['MAX- (失点)'] !== '' ? parseInt(row['MAX- (失点)'], 10) : undefined,
             isAp: isApVal,
             isFc: isApVal || row['is_FC (1:はい / 0:いいえ)'] == 1,
@@ -156,27 +286,31 @@ export default function GameDetailPage() {
             isMax: false,
             playedAt: new Date().toISOString(),
             customAttributes: {
-              composer: row['Composer (コンポーザー)'] || row['composer'] || undefined,
-              bpm: row['BPM'] ? parseInt(row['BPM'], 10) : undefined
+              'コンポーザー': row['Composer (コンポーザー)'] || row['composer'],
+              'BPM': row['BPM'],
+              '譜面制作者': row['譜面制作者']
             }
           };
         });
 
-        setRecords([...importedRecords, ...records]);
+        const newRecords = [...importedRecords, ...records];
+        setRecords(newRecords);
+        saveStoredRecords(newRecords);
       }
     });
   };
 
-  // Filter records
-  const filteredRecords = records.filter(r => {
+  // Filter records for current game
+  const currentGameRecords = records.filter(r => r.gameId === gameId);
+  const filteredRecords = currentGameRecords.filter(r => {
     const matchesSearch = r.songTitle.toLowerCase().includes(search.toLowerCase()) ||
-                          (r.customAttributes?.composer || '').toLowerCase().includes(search.toLowerCase());
+                          Object.values(r.customAttributes || {}).some(v => String(v).toLowerCase().includes(search.toLowerCase()));
     const matchesAp = apFilter === 'All' || (apFilter === 'AP' && r.isAp) || (apFilter === 'MAX' && r.isMax);
     return matchesSearch && matchesAp;
   });
 
-  const currentApCount = records.filter(r => r.isAp).length;
-  const currentMaxCount = records.filter(r => r.isMax).length;
+  const currentApCount = currentGameRecords.filter(r => r.isAp).length;
+  const currentMaxCount = currentGameRecords.filter(r => r.isMax).length;
 
   return (
     <div className="space-y-6">
@@ -193,25 +327,34 @@ export default function GameDetailPage() {
         <div>
           <div className="flex items-center space-x-2">
             <span className="text-[10px] font-medium px-2 py-0.5 rounded bg-zinc-900 text-zinc-400 border border-zinc-800">
-              {game.device}
+              {currentGame.device}
             </span>
-            <h1 className="text-xl font-bold text-zinc-100">{game.name}</h1>
+            <h1 className="text-xl font-bold text-zinc-100">{currentGame.name}</h1>
           </div>
           <p className="text-xs text-zinc-500 mt-1">
-            登録曲数: <span className="font-mono text-zinc-300 font-bold">{records.length} 曲</span>
+            登録曲数: <span className="font-mono text-zinc-300 font-bold">{currentGameRecords.length} 曲</span>
           </p>
         </div>
 
-        {/* Stats Badges */}
+        {/* Stats & Settings button */}
         <div className="flex items-center space-x-3">
           <div className="bg-zinc-900 border border-zinc-800 px-3 py-1.5 rounded text-center">
-            <span className="text-[10px] text-zinc-500 block truncate">{game.apTerm}</span>
+            <span className="text-[10px] text-zinc-500 block truncate">{currentGame.apTerm}</span>
             <span className="text-lg font-bold text-zinc-200 num-tabular">{currentApCount.toLocaleString()}</span>
           </div>
           <div className="bg-zinc-900 border border-zinc-800 px-3 py-1.5 rounded text-center">
-            <span className="text-[10px] text-zinc-500 block truncate">{game.maxTerm}</span>
+            <span className="text-[10px] text-zinc-500 block truncate">{currentGame.maxTerm}</span>
             <span className="text-lg font-bold text-zinc-300 num-tabular">{currentMaxCount.toLocaleString()}</span>
           </div>
+
+          <button
+            onClick={() => setIsSettingsModalOpen(true)}
+            title="この機種のランク(Grade)マスター設定"
+            className="flex items-center space-x-1 bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 border border-zinc-800 px-3 py-2 rounded text-xs transition"
+          >
+            <Settings className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Grade設定</span>
+          </button>
         </div>
       </div>
 
@@ -222,7 +365,7 @@ export default function GameDetailPage() {
             <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
             <input
               type="text"
-              placeholder="曲名・コンポーザーで検索..."
+              placeholder="曲名・属性で検索..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="w-full bg-zinc-900 border border-zinc-800 text-zinc-200 text-xs rounded pl-8 pr-3 py-1.5 focus:outline-none focus:border-zinc-600"
@@ -238,17 +381,17 @@ export default function GameDetailPage() {
                   apFilter === filter ? 'bg-zinc-800 text-zinc-100 font-medium' : 'text-zinc-400 hover:text-zinc-200'
                 }`}
               >
-                {filter === 'All' ? '全曲' : filter === 'AP' ? game.apTerm : game.maxTerm}
+                {filter === 'All' ? '全曲' : filter === 'AP' ? currentGame.apTerm : currentGame.maxTerm}
               </button>
             ))}
           </div>
         </div>
 
-        {/* Action Buttons: Add Record, CSV Export, CSV Import */}
+        {/* Action Buttons */}
         <div className="flex items-center space-x-2">
           <button
             onClick={handleExportSongsCsv}
-            title="この機種の楽曲リストCSVを出力"
+            title="CSVエクスポート"
             className="flex items-center space-x-1 bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-800 px-2.5 py-1.5 rounded text-xs font-medium transition"
           >
             <Download className="w-3.5 h-3.5 text-zinc-400" />
@@ -257,7 +400,7 @@ export default function GameDetailPage() {
 
           <label
             htmlFor="song-csv-import"
-            title="楽曲CSVを取り込み"
+            title="CSVインポート"
             className="flex items-center space-x-1 bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-800 px-2.5 py-1.5 rounded text-xs font-medium cursor-pointer transition"
           >
             <Upload className="w-3.5 h-3.5 text-zinc-400" />
@@ -272,7 +415,7 @@ export default function GameDetailPage() {
           </label>
 
           <button
-            onClick={() => setIsModalOpen(true)}
+            onClick={handleOpenAddModal}
             className="flex items-center justify-center space-x-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 px-3.5 py-1.5 rounded text-xs font-medium transition"
           >
             <Plus className="w-3.5 h-3.5 text-zinc-400" />
@@ -296,8 +439,8 @@ export default function GameDetailPage() {
                 <th className="py-2.5 px-4">Score</th>
                 <th className="py-2.5 px-3">Grade</th>
                 <th className="py-2.5 px-3">MAX-</th>
-                <th className="py-2.5 px-3 text-center">{game.apTerm}</th>
-                <th className="py-2.5 px-4">コンポーザー / BPM</th>
+                <th className="py-2.5 px-3 text-center">{currentGame.apTerm}</th>
+                <th className="py-2.5 px-4">詳細属性 (BPM・制作者等)</th>
                 <th className="py-2.5 px-3 text-right">操作</th>
               </tr>
             </thead>
@@ -337,13 +480,22 @@ export default function GameDetailPage() {
                         <span className="text-zinc-600">-</span>
                       )}
                     </td>
-                    <td className="py-2.5 px-4 text-zinc-400 truncate max-w-xs">
-                      {rec.customAttributes?.composer || '-'} {rec.customAttributes?.bpm ? `(BPM: ${rec.customAttributes.bpm})` : ''}
+                    <td className="py-2.5 px-4 text-zinc-400 truncate max-w-xs space-x-2">
+                      {Object.entries(rec.customAttributes || {}).map(([k, v]) => (
+                        v ? <span key={k} className="text-[11px] bg-zinc-900/80 border border-zinc-800 px-1.5 py-0.5 rounded text-zinc-400">{k}: {String(v)}</span> : null
+                      ))}
                     </td>
-                    <td className="py-2.5 px-3 text-right">
+                    <td className="py-2.5 px-3 text-right space-x-1">
                       <button
-                        onClick={() => setRecords(records.filter(r => r.id !== rec.id))}
-                        className="text-zinc-600 hover:text-zinc-300 p-1 transition"
+                        onClick={() => handleOpenEditModal(rec)}
+                        className="text-zinc-400 hover:text-zinc-100 p-1 transition"
+                        title="編集"
+                      >
+                        <FileEdit className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        onClick={() => handleDeleteRecord(rec.id)}
+                        className="text-zinc-600 hover:text-rose-400 p-1 transition"
                         title="削除"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
@@ -357,18 +509,20 @@ export default function GameDetailPage() {
         </div>
       </div>
 
-      {/* Modal for adding a new play record */}
-      {isModalOpen && (
+      {/* Modal for ADDING or EDITING a play record */}
+      {isRecordModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
           <div className="bg-[#121215] border border-zinc-700 w-full max-w-lg rounded-lg p-6 space-y-4 shadow-xl max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
-              <h3 className="text-sm font-bold text-zinc-100">{game.name} - プレイ記録の追加</h3>
-              <button onClick={() => setIsModalOpen(false)} className="text-zinc-500 hover:text-zinc-300">
+              <h3 className="text-sm font-bold text-zinc-100">
+                {editingRecordId ? `${currentGame.name} - プレイ記録の編集` : `${currentGame.name} - 新しいプレイ記録の追加`}
+              </h3>
+              <button onClick={() => setIsRecordModalOpen(false)} className="text-zinc-500 hover:text-zinc-300">
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            <form onSubmit={handleAddRecord} className="space-y-3 text-xs">
+            <form onSubmit={handleSaveRecord} className="space-y-3 text-xs">
               <div>
                 <label className="text-zinc-300 font-medium block mb-1">楽曲タイトル *</label>
                 <input
@@ -419,6 +573,17 @@ export default function GameDetailPage() {
                 </div>
 
                 <div>
+                  <label className="text-zinc-300 font-medium block mb-1">ノーツ数 (Notes)</label>
+                  <input
+                    type="number"
+                    placeholder="例: 2222"
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
+                    className="w-full bg-zinc-900 border border-zinc-800 text-zinc-100 rounded px-3 py-2 focus:outline-none focus:border-zinc-600 font-mono"
+                  />
+                </div>
+
+                <div>
                   <label className="text-zinc-300 font-medium block mb-1">スコア (Score)</label>
                   <input
                     type="number"
@@ -428,20 +593,23 @@ export default function GameDetailPage() {
                     className="w-full bg-zinc-900 border border-zinc-800 text-zinc-100 rounded px-3 py-2 focus:outline-none focus:border-zinc-600 font-mono"
                   />
                 </div>
-
-                <div>
-                  <label className="text-zinc-300 font-medium block mb-1">ランク (Grade)</label>
-                  <input
-                    type="text"
-                    placeholder="例: SSS+, PM, AJ"
-                    value={grade}
-                    onChange={(e) => setGrade(e.target.value)}
-                    className="w-full bg-zinc-900 border border-zinc-800 text-zinc-100 rounded px-3 py-2 focus:outline-none focus:border-zinc-600"
-                  />
-                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
+                {/* Grade Combobox */}
+                <div>
+                  <label className="text-zinc-300 font-medium block mb-1">Grade / ランク (マスターから選択)</label>
+                  <select
+                    value={grade}
+                    onChange={(e) => setGrade(e.target.value)}
+                    className="w-full bg-zinc-900 border border-zinc-800 text-zinc-100 rounded px-3 py-2 focus:outline-none focus:border-zinc-600 font-semibold"
+                  >
+                    {currentGrades.map(g => (
+                      <option key={g} value={g}>{g}</option>
+                    ))}
+                  </select>
+                </div>
+
                 <div>
                   <label className="text-zinc-300 font-medium block mb-1">MAX- (失点数)</label>
                   <input
@@ -452,18 +620,31 @@ export default function GameDetailPage() {
                     className="w-full bg-zinc-900 border border-zinc-800 text-zinc-100 rounded px-3 py-2 focus:outline-none focus:border-zinc-600 font-mono"
                   />
                 </div>
-
-                <div>
-                  <label className="text-zinc-300 font-medium block mb-1">コンポーザー (任意)</label>
-                  <input
-                    type="text"
-                    placeholder="作曲者名"
-                    value={composer}
-                    onChange={(e) => setComposer(e.target.value)}
-                    className="w-full bg-zinc-900 border border-zinc-800 text-zinc-100 rounded px-3 py-2 focus:outline-none focus:border-zinc-600"
-                  />
-                </div>
               </div>
+
+              {/* Dynamic Custom Fields Inputs */}
+              {customFields.length > 0 && (
+                <div className="pt-2 border-t border-zinc-800 space-y-2">
+                  <label className="text-zinc-300 font-medium block">追加カスタム属性 (自動生成)</label>
+                  <div className="grid grid-cols-2 gap-3">
+                    {customFields.map(field => (
+                      <div key={field.id}>
+                        <label className="text-zinc-400 text-[11px] block mb-1">{field.name}</label>
+                        <input
+                          type={field.type === 'number' ? 'number' : 'text'}
+                          placeholder={`${field.name}を入力...`}
+                          value={dynamicAttrs[field.name] || ''}
+                          onChange={(e) => setDynamicAttrs({
+                            ...dynamicAttrs,
+                            [field.name]: e.target.value
+                          })}
+                          className="w-full bg-zinc-900 border border-zinc-800 text-zinc-100 rounded px-3 py-1.5 focus:outline-none focus:border-zinc-600"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* Status Flags */}
               <div className="pt-2 border-t border-zinc-800 space-y-2">
@@ -482,7 +663,7 @@ export default function GameDetailPage() {
                       }}
                       className="rounded bg-zinc-900 border-zinc-800 text-zinc-200 focus:ring-0"
                     />
-                    <span className="text-zinc-200">{game.apTerm} (AP)</span>
+                    <span className="text-zinc-200">{currentGame.apTerm} (AP)</span>
                   </label>
 
                   <label className="inline-flex items-center space-x-1.5 cursor-pointer">
@@ -496,7 +677,7 @@ export default function GameDetailPage() {
                       }}
                       className="rounded bg-zinc-900 border-zinc-800 text-zinc-200 focus:ring-0"
                     />
-                    <span className="text-zinc-300">FC (フルコンボ)</span>
+                    <span className="text-zinc-300">{currentGame.fcTerm || 'FC (フルコンボ)'}</span>
                   </label>
 
                   <label className="inline-flex items-center space-x-1.5 cursor-pointer">
@@ -512,7 +693,7 @@ export default function GameDetailPage() {
                       }}
                       className="rounded bg-zinc-900 border-zinc-800 text-zinc-200 focus:ring-0"
                     />
-                    <span className="text-zinc-400">Clear (クリア)</span>
+                    <span className="text-zinc-400">{currentGame.clearTerm || 'Clear (クリア)'}</span>
                   </label>
                 </div>
               </div>
@@ -520,7 +701,7 @@ export default function GameDetailPage() {
               <div className="pt-3 flex justify-end space-x-2">
                 <button
                   type="button"
-                  onClick={() => setIsModalOpen(false)}
+                  onClick={() => setIsRecordModalOpen(false)}
                   className="px-3 py-1.5 rounded text-zinc-400 hover:bg-zinc-800 transition"
                 >
                   キャンセル
@@ -529,10 +710,84 @@ export default function GameDetailPage() {
                   type="submit"
                   className="px-4 py-1.5 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-100 border border-zinc-700 font-medium transition"
                 >
-                  追加する
+                  {editingRecordId ? '更新して保存' : '追加する'}
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal for Game Grade Master Settings */}
+      {isSettingsModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+          <div className="bg-[#121215] border border-zinc-700 w-full max-w-md rounded-lg p-6 space-y-4 shadow-xl">
+            <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
+              <h3 className="text-sm font-bold text-zinc-100">{currentGame.name} - Grade / ランクマスター設定</h3>
+              <button onClick={() => setIsSettingsModalOpen(false)} className="text-zinc-500 hover:text-zinc-300">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-3 text-xs">
+              <p className="text-zinc-400 text-[11px]">
+                この機種で入力時にコンボボックスに表示されるランク (Grade) の一覧を設定します。
+              </p>
+
+              <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+                {editedGrades.map((g, idx) => (
+                  <div key={idx} className="flex items-center justify-between bg-zinc-900 border border-zinc-800 px-3 py-1.5 rounded">
+                    <span className="font-mono text-zinc-200">{g}</span>
+                    <button
+                      onClick={() => setEditedGrades(editedGrades.filter((_, i) => i !== idx))}
+                      className="text-zinc-600 hover:text-rose-400 transition"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+
+              {/* Add Grade Form */}
+              <div className="flex space-x-2 pt-2">
+                <input
+                  type="text"
+                  placeholder="新しいGrade名 (例: Pure Memory, AJ...)"
+                  value={newGradeInput}
+                  onChange={(e) => setNewGradeInput(e.target.value)}
+                  className="flex-1 bg-zinc-900 border border-zinc-800 text-zinc-100 rounded px-3 py-1.5 focus:outline-none"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!newGradeInput.trim()) return;
+                    setEditedGrades([...editedGrades, newGradeInput.trim()]);
+                    setNewGradeInput('');
+                  }}
+                  className="bg-zinc-800 hover:bg-zinc-700 text-zinc-200 px-3 py-1.5 rounded border border-zinc-700 font-medium transition flex items-center space-x-1"
+                >
+                  <PlusCircle className="w-3.5 h-3.5 text-zinc-400" />
+                  <span>追加</span>
+                </button>
+              </div>
+
+              <div className="pt-3 border-t border-zinc-800 flex justify-end space-x-2">
+                <button
+                  type="button"
+                  onClick={() => setIsSettingsModalOpen(false)}
+                  className="px-3 py-1.5 rounded text-zinc-400 hover:bg-zinc-800 transition"
+                >
+                  キャンセル
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSaveGameSettings}
+                  className="px-4 py-1.5 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-100 border border-zinc-700 font-medium transition"
+                >
+                  設定を保存
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

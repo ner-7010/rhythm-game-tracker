@@ -9,7 +9,17 @@ export const INITIAL_GAMES: GameTitle[] = [
     maxCount: 0, 
     apTerm: 'Pure Memory', 
     maxTerm: 'MAX / 理論値', 
-    device: 'Mobile' 
+    fcTerm: 'Full Recall',
+    clearTerm: 'Track Complete',
+    failedTerm: 'Track Lost',
+    device: 'Mobile',
+    grades: [
+      'Pure Memory (理論値)',
+      'Pure Memory',
+      'Full Recall',
+      'Track Complete',
+      'Track Lost'
+    ]
   }
 ];
 

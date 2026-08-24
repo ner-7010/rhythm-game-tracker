@@ -1,14 +1,16 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { INITIAL_GAMES, MOCK_GROWTH_STATS } from '@/lib/mockData';
-import { GameTitle } from '@/lib/types';
+import { GameTitle, PlayRecord } from '@/lib/types';
+import { getStoredGames, saveStoredGames, getStoredRecords } from '@/lib/storage';
 import { Award, Zap, Gamepad2, TrendingUp, Calendar, ChevronRight, Search, Plus, X } from 'lucide-react';
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid, Legend } from 'recharts';
 
 export default function DashboardPage() {
-  const [games, setGames] = useState<GameTitle[]>(INITIAL_GAMES);
+  const [games, setGames] = useState<GameTitle[]>([]);
+  const [records, setRecords] = useState<PlayRecord[]>([]);
+
   const [period, setPeriod] = useState<'week' | 'month' | 'year'>('week');
   const [filterDevice, setFilterDevice] = useState<'All' | 'Mobile' | 'Arcade'>('All');
   const [searchQuery, setSearchQuery] = useState('');
@@ -20,11 +22,30 @@ export default function DashboardPage() {
   const [newMaxTerm, setNewMaxTerm] = useState('MAX / 理論値');
   const [newDevice, setNewDevice] = useState<'Mobile' | 'Arcade'>('Mobile');
 
-  const stats = MOCK_GROWTH_STATS[period];
-  const totalAp = games.reduce((acc, g) => acc + g.apCount, 0);
-  const totalMax = games.reduce((acc, g) => acc + g.maxCount, 0);
+  // Load stored games & records on mount
+  useEffect(() => {
+    const loadedGames = getStoredGames();
+    const loadedRecords = getStoredRecords();
+    setGames(loadedGames);
+    setRecords(loadedRecords);
+  }, []);
 
-  const filteredGames = games.filter(g => {
+  // Compute live game counts based on actual records
+  const gamesWithLiveCounts = games.map(g => {
+    const gameRecs = records.filter(r => r.gameId === g.id);
+    const ap = gameRecs.filter(r => r.isAp).length;
+    const max = gameRecs.filter(r => r.isMax).length;
+    return {
+      ...g,
+      apCount: ap || g.apCount,
+      maxCount: max || g.maxCount
+    };
+  });
+
+  const totalAp = gamesWithLiveCounts.reduce((acc, g) => acc + g.apCount, 0);
+  const totalMax = gamesWithLiveCounts.reduce((acc, g) => acc + g.maxCount, 0);
+
+  const filteredGames = gamesWithLiveCounts.filter(g => {
     const matchesDevice = filterDevice === 'All' || g.device === filterDevice;
     const matchesSearch = g.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
                           g.apTerm.toLowerCase().includes(searchQuery.toLowerCase());
@@ -44,15 +65,30 @@ export default function DashboardPage() {
       maxCount: 0,
       apTerm: newApTerm || 'AP',
       maxTerm: newMaxTerm || 'MAX',
-      device: newDevice
+      device: newDevice,
+      grades: [newMaxTerm, newApTerm, 'Full Combo', 'Clear', 'Failed']
     };
 
-    setGames([...games, newGame]);
+    const updated = [...games, newGame];
+    setGames(updated);
+    saveStoredGames(updated);
+
     setNewGameName('');
     setIsModalOpen(false);
   };
 
-  // Custom Tooltip for Stacked Chart to display cumulative totals nicely
+  // Calculate History Stacked Data for Chart dynamically from records
+  const totalApRecords = records.filter(r => r.isAp).length;
+  const totalFcRecords = records.filter(r => r.isFc && !r.isAp).length;
+  const totalClearRecords = records.filter(r => r.isClear && !r.isFc && !r.isAp).length;
+  const totalFailedRecords = records.filter(r => !r.isClear).length;
+
+  const chartHistoryData = [
+    { date: '過去', apCount: 0, fcCount: 0, clearCount: 0, failedCount: 0 },
+    { date: '現在', apCount: totalApRecords, fcCount: totalFcRecords, clearCount: totalClearRecords, failedCount: totalFailedRecords }
+  ];
+
+  // Custom Tooltip for Stacked Chart
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
       const ap = payload.find((p: any) => p.dataKey === 'apCount')?.value || 0;
@@ -100,7 +136,7 @@ export default function DashboardPage() {
             総合統計ダッシュボード
           </h1>
           <p className="text-xs text-zinc-400 mt-1">
-            音ゲーのプレイ記録・成長推移を管理・分析
+            全音ゲーのプレイ記録・成長推移をリアルタイム分析
           </p>
         </div>
 
@@ -156,15 +192,15 @@ export default function DashboardPage() {
 
         <div className="bg-[#121215] border border-zinc-800/80 p-4 rounded-lg">
           <div className="flex items-center justify-between text-zinc-400 text-xs font-medium">
-            <span>新規記録数</span>
+            <span>総登録楽曲数</span>
             <Calendar className="w-4 h-4 text-zinc-400" />
           </div>
           <div className="mt-2">
             <span className="text-2xl font-bold text-zinc-200 num-tabular">
-              {stats.newTracksCount} <span className="text-xs font-normal text-zinc-400">曲</span>
+              {records.length} <span className="text-xs font-normal text-zinc-400">曲</span>
             </span>
           </div>
-          <span className="text-[11px] text-zinc-500 mt-1 block">推移記録</span>
+          <span className="text-[11px] text-zinc-500 mt-1 block">プレイ記録全件</span>
         </div>
       </div>
 
@@ -199,7 +235,7 @@ export default function DashboardPage() {
         {/* Stacked Quiet Area Chart */}
         <div className="h-64 w-full pt-2">
           <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={stats.history} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
+            <AreaChart data={chartHistoryData} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
               <CartesianGrid strokeDasharray="2 2" stroke="#27272a" />
               <XAxis dataKey="date" stroke="#71717a" fontSize={11} tickLine={false} />
               <YAxis stroke="#71717a" fontSize={11} tickLine={false} />
@@ -214,7 +250,6 @@ export default function DashboardPage() {
                   return value;
                 }}
               />
-              {/* Stacked Order: apCount (Bottom) -> fcCount -> clearCount -> failedCount (Top) */}
               <Area type="monotone" dataKey="apCount" stackId="1" stroke="#e4e4e7" fill="#e4e4e7" fillOpacity={0.8} />
               <Area type="monotone" dataKey="fcCount" stackId="1" stroke="#a1a1aa" fill="#a1a1aa" fillOpacity={0.6} />
               <Area type="monotone" dataKey="clearCount" stackId="1" stroke="#71717a" fill="#71717a" fillOpacity={0.4} />

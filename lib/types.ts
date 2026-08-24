@@ -6,9 +6,13 @@ export interface GameTitle {
   maxCount: number;
   apTerm: string;
   maxTerm: string;
+  fcTerm?: string;       // 例: Full Recall, ALL JUSTICE...
+  clearTerm?: string;    // 例: Track Complete, Clear...
+  failedTerm?: string;   // 例: Track Lost, Failed...
   device: 'Mobile' | 'Arcade';
   specialMaxCount?: number;
   specialMaxTerm?: string;
+  grades?: string[];     // 機種ごとのランクマスター (例: ["理論値", "Pure Memory", "Full Recall", "Track Complete", "Track Lost"])
   customFields?: CustomFieldDefinition[];
 }
 
@@ -35,15 +39,15 @@ export interface PlayRecord {
   isClear: boolean;
   isMax: boolean;
   playedAt: string;
-  customAttributes: Record<string, any>;
+  customAttributes: Record<string, any>; // BPM, 譜面制作者など動的項目
 }
 
 export interface GrowthHistoryPoint {
   date: string;
-  apCount: number;      // AP数 (FC・クリアの上位)
-  fcCount: number;      // FC数 (AP除くフルコンボ数)
-  clearCount: number;   // クリア数 (FC除くクリア数)
-  failedCount: number;  // 未クリア・挑戦数 (クリア除く既プレイ数)
+  apCount: number;
+  fcCount: number;
+  clearCount: number;
+  failedCount: number;
 }
 
 export interface GrowthStats {
