@@ -110,20 +110,20 @@ export const fetchGamesAsync = async (): Promise<GameTitle[]> => {
     const res = await fetch('/api/games');
     if (res.ok) {
       const data = await res.json();
-      if (data.games && data.games.length > 0) {
+      if (Array.isArray(data.games)) {
         const games = data.games.map(mapDbToGame);
         saveStoredGames(games);
         return games;
       }
     }
   } catch (e) {
-    console.warn('API /api/games fetch error, fallback to local', e);
+    console.warn('API /api/games fetch error, fallback to direct Supabase', e);
   }
 
   // Direct Supabase fallback
   try {
     const { data, error } = await supabase.from('games').select('*').order('created_at', { ascending: true });
-    if (!error && data && data.length > 0) {
+    if (!error && Array.isArray(data)) {
       const games = data.map(mapDbToGame);
       saveStoredGames(games);
       return games;
@@ -162,14 +162,16 @@ export const deleteGameAsync = async (gameId: string): Promise<void> => {
   saveStoredGames(localGames);
 
   try {
-    await fetch(`/api/games?id=${encodeURIComponent(gameId)}`, { method: 'DELETE' });
+    const res = await fetch(`/api/games?id=${encodeURIComponent(gameId)}`, { method: 'DELETE' });
+    if (res.ok) return;
   } catch (e) {
     console.warn('API /api/games DELETE error, trying direct Supabase', e);
-    try {
-      await supabase.from('games').delete().eq('id', gameId);
-    } catch (err) {
-      console.error('Failed to delete game', err);
-    }
+  }
+
+  try {
+    await supabase.from('games').delete().eq('id', gameId);
+  } catch (err) {
+    console.error('Failed to delete game', err);
   }
 };
 
@@ -182,7 +184,7 @@ export const fetchRecordsAsync = async (gameId?: string): Promise<PlayRecord[]> 
     const res = await fetch(url);
     if (res.ok) {
       const data = await res.json();
-      if (data.records) {
+      if (Array.isArray(data.records)) {
         const records = data.records.map(mapDbToRecord);
         if (gameId) {
           const otherRecords = getStoredRecords().filter(r => r.gameId !== gameId);
@@ -204,7 +206,7 @@ export const fetchRecordsAsync = async (gameId?: string): Promise<PlayRecord[]> 
       query = query.eq('game_id', gameId);
     }
     const { data, error } = await query;
-    if (!error && data) {
+    if (!error && Array.isArray(data)) {
       const records = data.map(mapDbToRecord);
       if (gameId) {
         const otherRecords = getStoredRecords().filter(r => r.gameId !== gameId);
@@ -304,19 +306,20 @@ export const deleteRecordAsync = async (recordId: string, gameId: string): Promi
 };
 
 // ----------------------------------------------------
-// 3. LocalStorage Sync helpers (Sync legacy fallback)
+// 3. LocalStorage Sync helpers (Sync clean cache)
 // ----------------------------------------------------
 export const getStoredGames = (): GameTitle[] => {
-  if (typeof window === 'undefined') return INITIAL_GAMES;
+  if (typeof window === 'undefined') return [];
   try {
     const data = localStorage.getItem(GAMES_STORAGE_KEY);
     if (data) {
-      return JSON.parse(data);
+      const parsed = JSON.parse(data);
+      if (Array.isArray(parsed)) return parsed;
     }
   } catch (e) {
     console.error('Failed to load games from localStorage', e);
   }
-  return INITIAL_GAMES;
+  return [];
 };
 
 export const saveStoredGames = (games: GameTitle[]) => {
@@ -329,16 +332,17 @@ export const saveStoredGames = (games: GameTitle[]) => {
 };
 
 export const getStoredRecords = (): PlayRecord[] => {
-  if (typeof window === 'undefined') return MOCK_PLAY_RECORDS;
+  if (typeof window === 'undefined') return [];
   try {
     const data = localStorage.getItem(RECORDS_STORAGE_KEY);
     if (data) {
-      return JSON.parse(data);
+      const parsed = JSON.parse(data);
+      if (Array.isArray(parsed)) return parsed;
     }
   } catch (e) {
     console.error('Failed to load records from localStorage', e);
   }
-  return MOCK_PLAY_RECORDS;
+  return [];
 };
 
 export const saveStoredRecords = (records: PlayRecord[]) => {

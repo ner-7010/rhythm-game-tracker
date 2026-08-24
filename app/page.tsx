@@ -35,8 +35,8 @@ export default function DashboardPage() {
       // 1. Initial quick load from local cache
       const cachedGames = getStoredGames();
       const cachedRecords = getStoredRecords();
-      setGames(cachedGames);
-      setRecords(cachedRecords);
+      if (cachedGames.length > 0) setGames(cachedGames);
+      if (cachedRecords.length > 0) setRecords(cachedRecords);
       if (cachedGames.length > 0 && !selectedGameId) {
         setSelectedGameId(cachedGames[0].id);
       }
@@ -48,7 +48,7 @@ export default function DashboardPage() {
       ]);
       setGames(freshGames);
       setRecords(freshRecords);
-      if (freshGames.length > 0 && !selectedGameId) {
+      if (freshGames.length > 0 && (!selectedGameId || !freshGames.some(g => g.id === selectedGameId))) {
         setSelectedGameId(freshGames[0].id);
       }
     } catch (e) {
@@ -121,12 +121,11 @@ export default function DashboardPage() {
     };
 
     const updated = [...games, newGame];
-    setGames(updated);
+    setIsModalOpen(false);
     await saveGamesAsync(updated);
-
+    await loadData();
     if (!selectedGameId) setSelectedGameId(id);
     setNewGameName('');
-    setIsModalOpen(false);
   };
 
   const targetRecords = chartMode === 'singleGame'

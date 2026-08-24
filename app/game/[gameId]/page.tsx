@@ -80,16 +80,16 @@ export default function GameDetailPage() {
     try {
       // 1. Initial quick load from local cache
       const cachedGames = getStoredGames();
-      const cachedRecords = getStoredRecords();
+      const cachedRecords = getStoredRecords().filter(r => r.gameId === gameId);
       const loadedFields = getStoredCustomFields();
-      setGames(cachedGames);
-      setRecords(cachedRecords);
+      if (cachedGames.length > 0) setGames(cachedGames);
+      if (cachedRecords.length > 0) setRecords(cachedRecords);
       setCustomFields(loadedFields);
 
       // 2. Fetch fresh data from Supabase
       const [freshGames, freshRecords] = await Promise.all([
         fetchGamesAsync(),
-        fetchRecordsAsync()
+        fetchRecordsAsync(gameId)
       ]);
       setGames(freshGames);
       setRecords(freshRecords);
@@ -328,15 +328,14 @@ export default function GameDetailPage() {
       updatedRecords = [recordToUpsert, ...records];
     }
 
-    setRecords(updatedRecords);
-    await upsertRecordAsync(recordToUpsert);
     setIsRecordModalOpen(false);
+    await upsertRecordAsync(recordToUpsert);
+    await loadData();
   };
 
   const handleDeleteRecord = async (id: string) => {
-    const updated = records.filter(r => r.id !== id);
-    setRecords(updated);
     await deleteRecordAsync(id, gameId);
+    await loadData();
   };
 
   const handleMoveDiffOrder = (index: number, direction: 'up' | 'down') => {
@@ -475,9 +474,17 @@ export default function GameDetailPage() {
           };
         });
 
-        const updatedAllRecords = [...newGameRecords, ...otherGameRecords];
-        setRecords(updatedAllRecords);
-        await replaceRecordsAsync(gameId, newGameRecords);
+        setIsLoading(true);
+        try {
+          await replaceRecordsAsync(gameId, newGameRecords);
+          await loadData();
+          alert(`${newGameRecords.length}件の楽曲データをクラウドDBに同期保存しました。`);
+        } catch (err) {
+          console.error('Import failed', err);
+          alert('CSVの取込中にエラーが発生しました。');
+        } finally {
+          setIsLoading(false);
+        }
       }
     });
   };

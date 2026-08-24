@@ -124,7 +124,7 @@ export default function AdminPage() {
     Papa.parse(file, {
       header: true,
       skipEmptyLines: true,
-      complete: (results) => {
+      complete: async (results) => {
         const existingGames = getStoredGames();
 
         const updatedGames: GameTitle[] = results.data.map((row: any, idx: number) => {
@@ -188,12 +188,16 @@ export default function AdminPage() {
           };
         });
 
-        setGames(updatedGames);
-        saveGamesAsync(updatedGames).then(() => {
+        setIsLoading(true);
+        try {
+          await saveGamesAsync(updatedGames);
+          await loadData();
           setImportStatus(`機種マスター一括更新完了: ${updatedGames.length} 件のゲームタイトル設定をSupabaseに保存しました！`);
-        }).catch(err => {
-          setImportStatus(`ローカルに保存されましたがSupabase同期でエラー: ${err.message}`);
-        });
+        } catch (err: any) {
+          setImportStatus(`保存中にエラーが発生しました: ${err.message}`);
+        } finally {
+          setIsLoading(false);
+        }
       },
       error: (err) => {
         setImportStatus(`エラーが発生しました: ${err.message}`);
