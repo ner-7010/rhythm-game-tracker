@@ -176,7 +176,6 @@ export default function GameDetailPage() {
     setIsRecordModalOpen(true);
   };
 
-  // Automatic Flag Computation (including Unplayed category!)
   const calculateFlagsFromGrade = (gradeName: string) => {
     const matchedGrade = gradeMasters.find(g => g.name === gradeName);
     const category = matchedGrade ? matchedGrade.category : 'Unplayed';
@@ -337,7 +336,7 @@ export default function GameDetailPage() {
     document.body.removeChild(link);
   };
 
-  // Import CSV
+  // Import CSV (FULL OVERWRITE / REPLACE LOGIC for this gameId)
   const handleImportSongsCsv = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -346,12 +345,12 @@ export default function GameDetailPage() {
       header: true,
       skipEmptyLines: true,
       complete: (results) => {
-        let currentRecordList = [...records];
+        // 1. Filter OUT all existing records of THIS gameId (Clear old data completely!)
+        const otherGameRecords = records.filter(r => r.gameId !== gameId);
 
-        results.data.forEach((row: any, idx: number) => {
-          const title = row['Song Title (曲名)'] || row['title'] || row['曲名'];
-          if (!title) return;
-
+        // 2. Parse new records from CSV
+        const newGameRecords: PlayRecord[] = results.data.map((row: any, idx: number) => {
+          const title = row['Song Title (曲名)'] || row['title'] || row['曲名'] || '無題';
           const diff = row['Difficulty (難易度)'] || row['difficulty'] || difficultyMasters[0]?.name || 'MASTER';
           const gName = row['Grade (ランク)'] || (row['Score (スコア)'] ? 'Pure Memory' : '未プレイ');
           const { isPlayed, isMax, isAp, isFc, isClear } = calculateFlagsFromGrade(gName);
@@ -366,12 +365,8 @@ export default function GameDetailPage() {
             computedMaxMinus = evaluateFormula(currentGame.maxMinusFormula, notesVal, scoreVal);
           }
 
-          const existingIndex = currentRecordList.findIndex(
-            r => r.gameId === gameId && r.songTitle === title && r.difficulty === diff
-          );
-
-          const updatedRec: PlayRecord = {
-            id: existingIndex >= 0 ? currentRecordList[existingIndex].id : `imp-${Date.now()}-${idx}`,
+          return {
+            id: `imp-${Date.now()}-${idx}`,
             gameId,
             songTitle: title,
             difficulty: diff,
@@ -389,16 +384,12 @@ export default function GameDetailPage() {
               '譜面制作者': row['譜面制作者']
             }
           };
-
-          if (existingIndex >= 0) {
-            currentRecordList[existingIndex] = updatedRec;
-          } else {
-            currentRecordList.unshift(updatedRec);
-          }
         });
 
-        setRecords(currentRecordList);
-        saveStoredRecords(currentRecordList);
+        // 3. Combine and save (Old data for this game is completely replaced by new CSV!)
+        const updatedAllRecords = [...newGameRecords, ...otherGameRecords];
+        setRecords(updatedAllRecords);
+        saveStoredRecords(updatedAllRecords);
       }
     });
   };
@@ -476,11 +467,11 @@ export default function GameDetailPage() {
         <div className="flex items-center space-x-3">
           <div className="bg-zinc-900 border border-zinc-800 px-3 py-1.5 rounded text-center">
             <span className="text-[10px] text-zinc-500 block truncate">{currentGame.apTerm}</span>
-            <span className="text-lg font-bold text-zinc-200 num-tabular">{currentApCount.toLocaleString()}</span>
+            <span className="text-lg font-bold text-emerald-400 num-tabular">{currentApCount.toLocaleString()}</span>
           </div>
           <div className="bg-zinc-900 border border-zinc-800 px-3 py-1.5 rounded text-center">
             <span className="text-[10px] text-zinc-500 block truncate">{currentGame.maxTerm}</span>
-            <span className="text-lg font-bold text-zinc-300 num-tabular">{currentMaxCount.toLocaleString()}</span>
+            <span className="text-lg font-bold text-sky-400 num-tabular">{currentMaxCount.toLocaleString()}</span>
           </div>
 
           <button
@@ -550,11 +541,11 @@ export default function GameDetailPage() {
 
           <label
             htmlFor="song-csv-import"
-            title="CSV取込"
+            title="CSV完全上書き取込"
             className="flex items-center space-x-1 bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-800 px-2.5 py-1.5 rounded text-xs font-medium cursor-pointer transition"
           >
             <Upload className="w-3.5 h-3.5 text-zinc-400" />
-            <span className="hidden md:inline">CSV取込</span>
+            <span className="hidden md:inline">CSV置換取込</span>
             <input
               id="song-csv-import"
               type="file"
@@ -598,7 +589,7 @@ export default function GameDetailPage() {
               {sortedRecords.length === 0 ? (
                 <tr>
                   <td colSpan={12} className="py-8 text-center text-zinc-500">
-                    対象の曲が見つかりません。「新しいプレイ記録を追加」ボタン、または「CSV取込」からデータを入れてください。
+                    対象の曲が見つかりません。「新しいプレイ記録を追加」ボタン、または「CSV置換取込」からデータを入れてください。
                   </td>
                 </tr>
               ) : (
