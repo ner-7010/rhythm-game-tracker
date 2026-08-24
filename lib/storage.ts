@@ -103,26 +103,54 @@ export const mapRecordToDb = (rec: PlayRecord, userId?: string | null): any => {
 };
 
 // ----------------------------------------------------
-// 1. Games CRUD (Supabase + LocalStorage Fallback)
+// 1. Games CRUD (API Route + Supabase + LocalStorage Fallback)
 // ----------------------------------------------------
 export const fetchGamesAsync = async (): Promise<GameTitle[]> => {
+  try {
+    const res = await fetch('/api/games');
+    if (res.ok) {
+      const data = await res.json();
+      if (data.games && data.games.length > 0) {
+        const games = data.games.map(mapDbToGame);
+        saveStoredGames(games);
+        return games;
+      }
+    }
+  } catch (e) {
+    console.warn('API /api/games fetch error, fallback to local', e);
+  }
+
+  // Direct Supabase fallback
   try {
     const { data, error } = await supabase.from('games').select('*').order('created_at', { ascending: true });
     if (!error && data && data.length > 0) {
       const games = data.map(mapDbToGame);
-      saveStoredGames(games); // update local cache
+      saveStoredGames(games);
       return games;
     }
   } catch (e) {
-    console.warn('Failed to fetch games from Supabase, fallback to local', e);
+    console.warn('Direct Supabase fetch error, fallback to local', e);
   }
+
   return getStoredGames();
 };
 
 export const saveGamesAsync = async (games: GameTitle[]): Promise<void> => {
-  saveStoredGames(games); // always update local
+  saveStoredGames(games);
+  const dbGames = games.map(mapGameToDb);
+
   try {
-    const dbGames = games.map(mapGameToDb);
+    const res = await fetch('/api/games', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ games: dbGames }),
+    });
+    if (res.ok) return;
+  } catch (e) {
+    console.warn('API /api/games POST error, trying direct Supabase', e);
+  }
+
+  try {
     await supabase.from('games').upsert(dbGames, { onConflict: 'id' });
   } catch (e) {
     console.error('Failed to save games to Supabase', e);
@@ -132,17 +160,44 @@ export const saveGamesAsync = async (games: GameTitle[]): Promise<void> => {
 export const deleteGameAsync = async (gameId: string): Promise<void> => {
   const localGames = getStoredGames().filter(g => g.id !== gameId);
   saveStoredGames(localGames);
+
   try {
-    await supabase.from('games').delete().eq('id', gameId);
+    await fetch(`/api/games?id=${encodeURIComponent(gameId)}`, { method: 'DELETE' });
   } catch (e) {
-    console.error('Failed to delete game from Supabase', e);
+    console.warn('API /api/games DELETE error, trying direct Supabase', e);
+    try {
+      await supabase.from('games').delete().eq('id', gameId);
+    } catch (err) {
+      console.error('Failed to delete game', err);
+    }
   }
 };
 
 // ----------------------------------------------------
-// 2. Play Records CRUD (Supabase + LocalStorage Fallback)
+// 2. Play Records CRUD (API Route + Supabase + LocalStorage Fallback)
 // ----------------------------------------------------
 export const fetchRecordsAsync = async (gameId?: string): Promise<PlayRecord[]> => {
+  try {
+    const url = gameId ? `/api/records?gameId=${encodeURIComponent(gameId)}` : '/api/records';
+    const res = await fetch(url);
+    if (res.ok) {
+      const data = await res.json();
+      if (data.records) {
+        const records = data.records.map(mapDbToRecord);
+        if (gameId) {
+          const otherRecords = getStoredRecords().filter(r => r.gameId !== gameId);
+          saveStoredRecords([...otherRecords, ...records]);
+        } else {
+          saveStoredRecords(records);
+        }
+        return records;
+      }
+    }
+  } catch (e) {
+    console.warn('API /api/records fetch error, fallback to direct Supabase', e);
+  }
+
+  // Direct Supabase fallback
   try {
     let query = supabase.from('play_records').select('*');
     if (gameId) {
@@ -160,30 +215,34 @@ export const fetchRecordsAsync = async (gameId?: string): Promise<PlayRecord[]> 
       return records;
     }
   } catch (e) {
-    console.warn('Failed to fetch records from Supabase, fallback to local', e);
+    console.warn('Direct Supabase records error, fallback to local', e);
   }
+
   const localRecords = getStoredRecords();
   return gameId ? localRecords.filter(r => r.gameId === gameId) : localRecords;
 };
 
 // Replace Mode: Clears old records for gameId and bulk-inserts new records
 export const replaceRecordsAsync = async (gameId: string, records: PlayRecord[]): Promise<void> => {
-  // Update local cache
   const otherRecords = getStoredRecords().filter(r => r.gameId !== gameId);
   saveStoredRecords([...otherRecords, ...records]);
 
+  const dbRecords = records.map(r => mapRecordToDb(r));
+
   try {
-    // 1. Delete existing records for this game
+    const res = await fetch('/api/records', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mode: 'replace', gameId, records: dbRecords }),
+    });
+    if (res.ok) return;
+  } catch (e) {
+    console.warn('API /api/records replace error, trying direct Supabase', e);
+  }
+
+  try {
     await supabase.from('play_records').delete().eq('game_id', gameId);
-
-    // 2. Bulk insert new records in batches
     if (records.length > 0) {
-      const dbRecords = records.map(r => {
-        const row = mapRecordToDb(r);
-        delete row.id; // let Supabase assign new UUIDs cleanly on bulk insert
-        return row;
-      });
-
       const chunkSize = 200;
       for (let i = 0; i < dbRecords.length; i += chunkSize) {
         const chunk = dbRecords.slice(i, i + chunkSize);
@@ -206,8 +265,20 @@ export const upsertRecordAsync = async (record: PlayRecord): Promise<void> => {
   }
   saveStoredRecords(localRecords);
 
+  const dbRecord = mapRecordToDb(record);
+
   try {
-    const dbRecord = mapRecordToDb(record);
+    const res = await fetch('/api/records', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mode: 'upsertSingle', record: dbRecord }),
+    });
+    if (res.ok) return;
+  } catch (e) {
+    console.warn('API /api/records upsertSingle error, trying direct Supabase', e);
+  }
+
+  try {
     await supabase.from('play_records').upsert(dbRecord);
   } catch (e) {
     console.error('Failed to upsert record to Supabase', e);
@@ -217,6 +288,13 @@ export const upsertRecordAsync = async (record: PlayRecord): Promise<void> => {
 export const deleteRecordAsync = async (recordId: string, gameId: string): Promise<void> => {
   const localRecords = getStoredRecords().filter(r => r.id !== recordId);
   saveStoredRecords(localRecords);
+
+  try {
+    const res = await fetch(`/api/records?id=${encodeURIComponent(recordId)}`, { method: 'DELETE' });
+    if (res.ok) return;
+  } catch (e) {
+    console.warn('API /api/records delete error, trying direct Supabase', e);
+  }
 
   try {
     await supabase.from('play_records').delete().eq('id', recordId);

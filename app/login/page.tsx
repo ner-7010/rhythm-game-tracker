@@ -39,57 +39,57 @@ export default function LoginPage() {
     setIsLoading(true);
 
     try {
-      if (mode === 'login') {
-        const { data, error: authError } = await supabase.auth.signInWithPassword({
-          email: email.trim(),
-          password: password,
-        });
+      // 1. Primary: Use Next.js Server API Route (/api/auth) - 100% immune to browser CORS / fetch issues
+      const apiRes = await fetch('/api/auth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: email.trim(), password, action: mode }),
+      });
 
-        if (authError) {
-          if (authError.message === 'Invalid login credentials') {
-            setError('メールアドレスまたはパスワードが正しくありません');
-          } else if (authError.message.includes('fetch') || authError.message.includes('NetworkError')) {
-            setError(`Supabaseへの接続に失敗しました (${authError.message})。APIキーまたはURLが正しいかご確認ください。`);
-          } else {
-            setError(authError.message);
-          }
-          setIsLoading(false);
-          return;
-        }
+      const resData = await apiRes.json();
 
-        if (data.user) {
-          const userInfo = { id: data.user.id, name: data.user.email?.split('@')[0] || data.user.id };
-          localStorage.setItem('rg_stats_user', JSON.stringify(userInfo));
-          window.dispatchEvent(new Event('storage'));
-          router.push('/');
-        }
-      } else {
-        const { data, error: authError } = await supabase.auth.signUp({
-          email: email.trim(),
-          password: password,
-        });
+      if (!apiRes.ok) {
+        setError(resData.error || '認証に失敗しました');
+        setIsLoading(false);
+        return;
+      }
 
-        if (authError) {
-          setError(authError.message);
-          setIsLoading(false);
-          return;
-        }
-
-        if (data.session) {
-          const userInfo = { id: data.user!.id, name: data.user!.email?.split('@')[0] || data.user!.id };
+      if (mode === 'signup') {
+        if (resData.session || resData.user) {
+          const userInfo = { id: resData.user.id, name: resData.user.email?.split('@')[0] || resData.user.id };
           localStorage.setItem('rg_stats_user', JSON.stringify(userInfo));
           window.dispatchEvent(new Event('storage'));
           router.push('/');
         } else {
-          setMessage('確認メールを送信しました。メール内のリンクをクリックして登録を完了してください。');
+          setMessage(resData.message || '確認メールを送信しました。メールをご確認ください。');
+        }
+      } else {
+        if (resData.user) {
+          const userInfo = { id: resData.user.id, name: resData.user.email?.split('@')[0] || resData.user.id };
+          localStorage.setItem('rg_stats_user', JSON.stringify(userInfo));
+          window.dispatchEvent(new Event('storage'));
+          router.push('/');
         }
       }
     } catch (err: any) {
-      const errMsg = err?.message || String(err);
-      if (errMsg.includes('Failed to fetch') || errMsg.includes('NetworkError')) {
-        setError('【Failed to fetch エラー】Supabase API への通信が失敗しました。Vercel の Environment Variables に NEXT_PUBLIC_SUPABASE_URL と NEXT_PUBLIC_SUPABASE_ANON_KEY が正しく設定され、再デプロイされているかご確認ください。');
-      } else {
-        setError(errMsg);
+      // 2. Fallback: Direct Supabase client
+      try {
+        if (mode === 'login') {
+          const { data, error: authError } = await supabase.auth.signInWithPassword({
+            email: email.trim(),
+            password: password,
+          });
+          if (authError) throw authError;
+          if (data.user) {
+            const userInfo = { id: data.user.id, name: data.user.email?.split('@')[0] || data.user.id };
+            localStorage.setItem('rg_stats_user', JSON.stringify(userInfo));
+            window.dispatchEvent(new Event('storage'));
+            router.push('/');
+            return;
+          }
+        }
+      } catch (directErr: any) {
+        setError(directErr.message || '認証中にエラーが発生しました');
       }
     } finally {
       setIsLoading(false);
