@@ -2,10 +2,10 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
-import { INITIAL_GAMES, MOCK_GROWTH_STATS, MOCK_PLAY_RECORDS } from '@/lib/mockData';
+import { INITIAL_GAMES, MOCK_GROWTH_STATS } from '@/lib/mockData';
 import { GameTitle } from '@/lib/types';
 import { Award, Zap, Gamepad2, TrendingUp, Calendar, ChevronRight, Search, Plus, X } from 'lucide-react';
-import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts';
+import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid, Legend } from 'recharts';
 
 export default function DashboardPage() {
   const [games, setGames] = useState<GameTitle[]>(INITIAL_GAMES);
@@ -52,6 +52,45 @@ export default function DashboardPage() {
     setIsModalOpen(false);
   };
 
+  // Custom Tooltip for Stacked Chart to display cumulative totals nicely
+  const CustomTooltip = ({ active, payload, label }: any) => {
+    if (active && payload && payload.length) {
+      const ap = payload.find((p: any) => p.dataKey === 'apCount')?.value || 0;
+      const fc = payload.find((p: any) => p.dataKey === 'fcCount')?.value || 0;
+      const clear = payload.find((p: any) => p.dataKey === 'clearCount')?.value || 0;
+      const failed = payload.find((p: any) => p.dataKey === 'failedCount')?.value || 0;
+
+      const totalFc = ap + fc;
+      const totalClear = totalFc + clear;
+      const totalPlayed = totalClear + failed;
+
+      return (
+        <div className="bg-[#18181b] border border-zinc-700 p-3 rounded text-xs space-y-1.5 shadow-xl">
+          <p className="font-bold text-zinc-200 border-b border-zinc-800 pb-1">{label}</p>
+          <div className="space-y-1 font-mono text-[11px]">
+            <div className="flex justify-between space-x-4 text-zinc-100">
+              <span>AP (完全精度):</span>
+              <span className="font-bold">{ap} 曲</span>
+            </div>
+            <div className="flex justify-between space-x-4 text-zinc-300">
+              <span>AP + FC 累積:</span>
+              <span className="font-bold">{totalFc} 曲</span>
+            </div>
+            <div className="flex justify-between space-x-4 text-zinc-400">
+              <span>AP + FC + Clear 累積:</span>
+              <span className="font-bold">{totalClear} 曲</span>
+            </div>
+            <div className="flex justify-between space-x-4 text-zinc-500">
+              <span>総既プレイ数 (失敗含む):</span>
+              <span className="font-bold">{totalPlayed} 曲</span>
+            </div>
+          </div>
+        </div>
+      );
+    }
+    return null;
+  };
+
   return (
     <div className="space-y-8">
       {/* Header Title & Intro */}
@@ -67,7 +106,7 @@ export default function DashboardPage() {
 
         <button
           onClick={() => setIsModalOpen(true)}
-          className="inline-flex items-center space-x-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 px-3.5 py-1.5 rounded-md text-xs font-medium transition self-start md:self-auto"
+          className="inline-flex items-center space-x-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 px-3.5 py-1.5 rounded text-xs font-medium transition self-start md:self-auto"
         >
           <Plus className="w-3.5 h-3.5 text-zinc-400" />
           <span>新しい音ゲータイトルを追加</span>
@@ -129,13 +168,16 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Growth Trend Graph Section */}
+      {/* Growth Trend Graph Section - Stacked Area Chart */}
       <div className="bg-[#121215] border border-zinc-800/80 p-5 rounded-lg space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-zinc-800/80 pb-3">
           <div>
             <h2 className="text-sm font-semibold text-zinc-200 flex items-center gap-2">
-              <TrendingUp className="w-4 h-4 text-zinc-400" /> 成長・AP更新推移
+              <TrendingUp className="w-4 h-4 text-zinc-400" /> 成長・リザルト累積推移 (積み上げ)
             </h2>
+            <p className="text-[11px] text-zinc-500 mt-0.5">
+              下から「AP」→「AP+FC」→「AP+FC+Clear」→「全既プレイ数」の順に積み上げて表示
+            </p>
           </div>
           
           {/* Period Selector Tabs */}
@@ -154,17 +196,29 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Quiet Chart */}
-        <div className="h-56 w-full pt-2">
+        {/* Stacked Quiet Area Chart */}
+        <div className="h-64 w-full pt-2">
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={stats.history} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
               <CartesianGrid strokeDasharray="2 2" stroke="#27272a" />
               <XAxis dataKey="date" stroke="#71717a" fontSize={11} tickLine={false} />
               <YAxis stroke="#71717a" fontSize={11} tickLine={false} />
-              <Tooltip
-                contentStyle={{ backgroundColor: '#18181b', borderColor: '#27272a', borderRadius: '6px', color: '#e4e4e7', fontSize: '11px' }}
+              <Tooltip content={<CustomTooltip />} />
+              <Legend
+                wrapperStyle={{ fontSize: '11px', paddingTop: '10px' }}
+                formatter={(value) => {
+                  if (value === 'apCount') return 'AP数';
+                  if (value === 'fcCount') return 'FC数 (AP除く)';
+                  if (value === 'clearCount') return 'Clear数 (FC除く)';
+                  if (value === 'failedCount') return '既プレイ数 (未Clear含む)';
+                  return value;
+                }}
               />
-              <Area type="monotone" dataKey="apCount" name="AP数" stroke="#a1a1aa" strokeWidth={1.5} fill="#27272a" fillOpacity={0.4} />
+              {/* Stacked Order: apCount (Bottom) -> fcCount -> clearCount -> failedCount (Top) */}
+              <Area type="monotone" dataKey="apCount" stackId="1" stroke="#e4e4e7" fill="#e4e4e7" fillOpacity={0.8} />
+              <Area type="monotone" dataKey="fcCount" stackId="1" stroke="#a1a1aa" fill="#a1a1aa" fillOpacity={0.6} />
+              <Area type="monotone" dataKey="clearCount" stackId="1" stroke="#71717a" fill="#71717a" fillOpacity={0.4} />
+              <Area type="monotone" dataKey="failedCount" stackId="1" stroke="#3f3f46" fill="#3f3f46" fillOpacity={0.3} />
             </AreaChart>
           </ResponsiveContainer>
         </div>

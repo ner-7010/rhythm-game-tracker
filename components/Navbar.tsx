@@ -1,47 +1,96 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { LayoutDashboard, FileSpreadsheet, Settings, LogIn, Disc } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { LayoutDashboard, FileSpreadsheet, LogIn, LogOut, User, Disc } from 'lucide-react';
 
 export default function Navbar() {
+  const router = useRouter();
+  const [user, setUser] = useState<{ id: string; name: string } | null>(null);
+
+  useEffect(() => {
+    // Check localStorage login state
+    const checkLogin = () => {
+      const storedUser = localStorage.getItem('rg_stats_user');
+      if (storedUser) {
+        try {
+          setUser(JSON.parse(storedUser));
+        } catch {
+          setUser({ id: 'admin', name: storedUser });
+        }
+      } else {
+        setUser(null);
+      }
+    };
+
+    checkLogin();
+    window.addEventListener('storage', checkLogin);
+    return () => window.removeEventListener('storage', checkLogin);
+  }, []);
+
+  const handleLogout = () => {
+    localStorage.removeItem('rg_stats_user');
+    setUser(null);
+    router.push('/');
+    window.dispatchEvent(new Event('storage'));
+  };
+
   return (
-    <header className="sticky top-0 z-50 w-full border-b border-card-border bg-[#09090b]/90 backdrop-blur-md">
+    <header className="sticky top-0 z-50 w-full border-b border-zinc-800 bg-[#09090b]/90 backdrop-blur-md">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
         <Link href="/" className="flex items-center space-x-3 text-zinc-100 hover:text-white transition">
-          <div className="w-8 h-8 rounded-lg bg-zinc-800 border border-zinc-700 flex items-center justify-center text-zinc-300">
-            <Disc className="w-5 h-5 text-blue-400" />
+          <div className="w-8 h-8 rounded-lg bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-300">
+            <Disc className="w-4 h-4 text-zinc-400" />
           </div>
           <div>
-            <span className="font-bold text-lg tracking-tight">RG STATS</span>
-            <span className="text-xs text-zinc-400 block -mt-1 font-normal">Sound Game Archives</span>
+            <span className="font-bold text-base tracking-tight">RG STATS</span>
+            <span className="text-[10px] text-zinc-500 block -mt-1 font-normal">Sound Game Archives</span>
           </div>
         </Link>
 
-        <nav className="flex items-center space-x-1 sm:space-x-4">
+        <nav className="flex items-center space-x-1 sm:space-x-3">
           <Link
             href="/"
-            className="flex items-center space-x-2 px-3 py-2 rounded-md text-sm font-medium text-zinc-300 hover:text-white hover:bg-zinc-800/60 transition"
+            className="flex items-center space-x-1.5 px-3 py-1.5 rounded text-xs font-medium text-zinc-300 hover:text-white hover:bg-zinc-800/60 transition"
           >
-            <LayoutDashboard className="w-4 h-4 text-blue-400" />
+            <LayoutDashboard className="w-3.5 h-3.5 text-zinc-400" />
             <span className="hidden sm:inline">総合ダッシュボード</span>
           </Link>
 
           <Link
             href="/admin"
-            className="flex items-center space-x-2 px-3 py-2 rounded-md text-sm font-medium text-zinc-300 hover:text-white hover:bg-zinc-800/60 transition"
+            className="flex items-center space-x-1.5 px-3 py-1.5 rounded text-xs font-medium text-zinc-300 hover:text-white hover:bg-zinc-800/60 transition"
           >
-            <FileSpreadsheet className="w-4 h-4 text-emerald-400" />
+            <FileSpreadsheet className="w-3.5 h-3.5 text-zinc-400" />
             <span className="hidden sm:inline">CSVインポート / 管理</span>
           </Link>
 
-          <Link
-            href="/login"
-            className="flex items-center space-x-2 px-3.5 py-1.5 rounded-md text-sm font-medium bg-zinc-800 text-zinc-100 hover:bg-zinc-700 border border-zinc-700 transition ml-2"
-          >
-            <LogIn className="w-4 h-4" />
-            <span>ログイン</span>
-          </Link>
+          {/* User Auth Status Area */}
+          {user ? (
+            <div className="flex items-center space-x-2 border-l border-zinc-800 pl-3 ml-2">
+              <div className="flex items-center space-x-1.5 bg-zinc-900 border border-zinc-800 px-2.5 py-1 rounded text-xs text-zinc-300">
+                <User className="w-3 h-3 text-zinc-400" />
+                <span className="font-medium text-zinc-200">{user.name}</span>
+              </div>
+              <button
+                onClick={handleLogout}
+                title="ログアウト"
+                className="flex items-center space-x-1 px-2.5 py-1 rounded text-xs font-medium bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 border border-zinc-800 transition"
+              >
+                <LogOut className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">ログアウト</span>
+              </button>
+            </div>
+          ) : (
+            <Link
+              href="/login"
+              className="flex items-center space-x-1.5 px-3 py-1.5 rounded text-xs font-medium bg-zinc-800 text-zinc-100 hover:bg-zinc-700 border border-zinc-700 transition ml-2"
+            >
+              <LogIn className="w-3.5 h-3.5" />
+              <span>ログイン</span>
+            </Link>
+          )}
         </nav>
       </div>
     </header>
