@@ -2,10 +2,10 @@
 
 export const dynamic = 'force-dynamic';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { LogIn, Lock, Mail, Shield, AlertCircle, Loader2 } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
+import { LogIn, Lock, Mail, Shield, AlertCircle, Loader2, Info, Server } from 'lucide-react';
+import { supabase, supabaseUrl, isSupabaseConfigured } from '@/lib/supabase';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -15,6 +15,11 @@ export default function LoginPage() {
   const [message, setMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [mode, setMode] = useState<'login' | 'signup'>('login');
+  const [isConfigured, setIsConfigured] = useState(true);
+
+  useEffect(() => {
+    setIsConfigured(isSupabaseConfigured());
+  }, []);
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -26,19 +31,28 @@ export default function LoginPage() {
       return;
     }
 
+    if (!isSupabaseConfigured()) {
+      setError('Supabaseの接続情報（NEXT_PUBLIC_SUPABASE_URL または KEY）が環境変数に設定されていません。VercelのEnvironment Variables設定を確認してください。');
+      return;
+    }
+
     setIsLoading(true);
 
     try {
       if (mode === 'login') {
         const { data, error: authError } = await supabase.auth.signInWithPassword({
-          email,
-          password,
+          email: email.trim(),
+          password: password,
         });
 
         if (authError) {
-          setError(authError.message === 'Invalid login credentials' 
-            ? 'メールアドレスまたはパスワードが正しくありません' 
-            : authError.message);
+          if (authError.message === 'Invalid login credentials') {
+            setError('メールアドレスまたはパスワードが正しくありません');
+          } else if (authError.message.includes('fetch') || authError.message.includes('NetworkError')) {
+            setError(`Supabaseへの接続に失敗しました (${authError.message})。APIキーまたはURLが正しいかご確認ください。`);
+          } else {
+            setError(authError.message);
+          }
           setIsLoading(false);
           return;
         }
@@ -51,8 +65,8 @@ export default function LoginPage() {
         }
       } else {
         const { data, error: authError } = await supabase.auth.signUp({
-          email,
-          password,
+          email: email.trim(),
+          password: password,
         });
 
         if (authError) {
@@ -71,7 +85,12 @@ export default function LoginPage() {
         }
       }
     } catch (err: any) {
-      setError(err?.message || '認証中にエラーが発生しました');
+      const errMsg = err?.message || String(err);
+      if (errMsg.includes('Failed to fetch') || errMsg.includes('NetworkError')) {
+        setError('【Failed to fetch エラー】Supabase API への通信が失敗しました。Vercel の Environment Variables に NEXT_PUBLIC_SUPABASE_URL と NEXT_PUBLIC_SUPABASE_ANON_KEY が正しく設定され、再デプロイされているかご確認ください。');
+      } else {
+        setError(errMsg);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -92,10 +111,22 @@ export default function LoginPage() {
           </p>
         </div>
 
+        {!isConfigured && (
+          <div className="bg-amber-950/40 border border-amber-800 text-amber-300 p-3 rounded text-xs space-y-1">
+            <div className="flex items-center space-x-1.5 font-bold">
+              <AlertCircle className="w-4 h-4 text-amber-400 flex-shrink-0" />
+              <span>環境変数が読み込めていません</span>
+            </div>
+            <p className="text-[11px] text-amber-400/90 leading-relaxed">
+              Vercel の「Settings」>「Environment Variables」に <code>NEXT_PUBLIC_SUPABASE_URL</code> と <code>NEXT_PUBLIC_SUPABASE_ANON_KEY</code> が設定されているか確認し、設定後に <strong>Redeploy（再デプロイ）</strong> を実行してください。
+            </p>
+          </div>
+        )}
+
         {error && (
-          <div className="bg-red-950/40 border border-red-800 text-red-300 p-3 rounded text-xs flex items-center space-x-2">
-            <AlertCircle className="w-4 h-4 text-red-400 flex-shrink-0" />
-            <span>{error}</span>
+          <div className="bg-red-950/40 border border-red-800 text-red-300 p-3 rounded text-xs flex items-start space-x-2">
+            <AlertCircle className="w-4 h-4 text-red-400 flex-shrink-0 mt-0.5" />
+            <span className="leading-relaxed">{error}</span>
           </div>
         )}
 
@@ -164,9 +195,11 @@ export default function LoginPage() {
             {mode === 'login' ? '新規アカウント登録はこちら' : 'ログイン画面に戻る'}
           </button>
           
-          <div className="flex items-center space-x-1 text-[11px] text-zinc-500">
-            <Shield className="w-3 h-3 text-zinc-400" />
-            <span>Supabase Auth</span>
+          <div className="flex items-center space-x-1 text-[11px] text-zinc-500" title={`Endpoint: ${supabaseUrl}`}>
+            <Server className="w-3 h-3 text-zinc-400" />
+            <span className="truncate max-w-[120px]">
+              {isConfigured ? 'Supabase 接続済' : '未設定 (Mock)'}
+            </span>
           </div>
         </div>
       </div>
