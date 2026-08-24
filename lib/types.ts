@@ -2,14 +2,14 @@ export type GradeCategory = 'MAX' | 'AP' | 'FC' | 'Clear' | 'Failed';
 
 export interface GradeMasterItem {
   id: string;
-  name: string; // 例: "Pure Memory", "Track Complete"
-  category: GradeCategory; // MAX / AP / FC / Clear / Failed
+  name: string;
+  category: GradeCategory;
 }
 
 export interface DifficultyMasterItem {
   id: string;
-  name: string; // 例: "BYD", "FTR", "PRS", "PST"
-  order: number; // 並び順 (数値が小さいほど高難易度)
+  name: string;
+  order: number;
 }
 
 export interface GameTitle {
@@ -26,8 +26,9 @@ export interface GameTitle {
   device: 'Mobile' | 'Arcade';
   specialMaxCount?: number;
   specialMaxTerm?: string;
-  gradeMasters?: GradeMasterItem[];       // Gradeマッピングマスター
-  difficultyMasters?: DifficultyMasterItem[]; // 難易度順序マスター
+  maxMinusFormula?: string;               // MAX- 自動計算式 (例: "10000000 + notes - score")
+  gradeMasters?: GradeMasterItem[];
+  difficultyMasters?: DifficultyMasterItem[];
   customFields?: CustomFieldDefinition[];
 }
 

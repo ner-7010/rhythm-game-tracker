@@ -11,8 +11,25 @@ import {
   getStoredCustomFields
 } from '@/lib/storage';
 import {
-  ArrowLeft, Search, Plus, FileEdit, CheckCircle2, X, Download, Upload, Trash2, Settings, PlusCircle, ArrowUp, ArrowDown, ArrowUpDown
+  ArrowLeft, Search, Plus, FileEdit, CheckCircle2, X, Download, Upload, Trash2, Settings, PlusCircle, ArrowUp, ArrowDown, ArrowUpDown, Calculator
 } from 'lucide-react';
+
+// Safe Math Formula Evaluator
+const evaluateFormula = (formula: string, notesVal: number, scoreVal: number): number | undefined => {
+  if (!formula || !formula.trim()) return undefined;
+  try {
+    let expr = formula.toLowerCase()
+      .replace(/\bnotes\b/g, String(notesVal))
+      .replace(/\bscore\b/g, String(scoreVal));
+    
+    if (!/^[0-9\+\-\*\/\(\)\s\.]+$/.test(expr)) return undefined;
+
+    const result = new Function(`return (${expr})`)();
+    return typeof result === 'number' && !isNaN(result) ? result : undefined;
+  } catch {
+    return undefined;
+  }
+};
 
 export default function GameDetailPage() {
   const params = useParams();
@@ -22,7 +39,6 @@ export default function GameDetailPage() {
   const [records, setRecords] = useState<PlayRecord[]>([]);
   const [customFields, setCustomFields] = useState<CustomFieldDefinition[]>([]);
 
-  // Load from localStorage
   useEffect(() => {
     const loadedGames = getStoredGames();
     const loadedRecords = getStoredRecords();
@@ -42,6 +58,7 @@ export default function GameDetailPage() {
     apTerm: 'Pure Memory',
     maxTerm: 'MAX / 理論値',
     device: 'Mobile' as const,
+    maxMinusFormula: '10000000 + notes - score',
     gradeMasters: [
       { id: 'g1', name: 'Pure Memory (理論値)', category: 'MAX' as const },
       { id: 'g2', name: 'Pure Memory', category: 'AP' as const },
@@ -94,6 +111,7 @@ export default function GameDetailPage() {
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
   const [editedGradeMasters, setEditedGradeMasters] = useState<GradeMasterItem[]>(gradeMasters);
   const [editedDiffMasters, setEditedDiffMasters] = useState<DifficultyMasterItem[]>(difficultyMasters);
+  const [editedFormula, setEditedFormula] = useState<string>(currentGame.maxMinusFormula || '');
 
   const [newGradeName, setNewGradeName] = useState('');
   const [newGradeCategory, setNewGradeCategory] = useState<GradeCategory>('AP');
@@ -104,7 +122,32 @@ export default function GameDetailPage() {
   useEffect(() => {
     if (currentGame.gradeMasters) setEditedGradeMasters(currentGame.gradeMasters);
     if (currentGame.difficultyMasters) setEditedDiffMasters(currentGame.difficultyMasters);
+    setEditedFormula(currentGame.maxMinusFormula || '');
   }, [currentGame]);
+
+  // Auto-Calculate MAX- when score or notes change!
+  const autoCalculateMaxMinus = (newScoreStr: string, newNotesStr: string) => {
+    const formula = currentGame.maxMinusFormula;
+    if (!formula) return;
+
+    const nVal = newNotesStr !== '' ? parseInt(newNotesStr, 10) : 0;
+    const sVal = newScoreStr !== '' ? parseInt(newScoreStr, 10) : 0;
+
+    const calcResult = evaluateFormula(formula, nVal, sVal);
+    if (calcResult !== undefined) {
+      setMaxMinus(String(calcResult));
+    }
+  };
+
+  const handleScoreChange = (val: string) => {
+    setScore(val);
+    autoCalculateMaxMinus(val, notes);
+  };
+
+  const handleNotesChange = (val: string) => {
+    setNotes(val);
+    autoCalculateMaxMinus(score, val);
+  };
 
   // Open modal for NEW record
   const handleOpenAddModal = () => {
@@ -136,7 +179,7 @@ export default function GameDetailPage() {
     setIsRecordModalOpen(true);
   };
 
-  // Compute AP/FC/Clear/MAX flags automatically based on Selected Grade Master!
+  // Compute AP/FC/Clear/MAX flags automatically based on Selected Grade Master
   const calculateFlagsFromGrade = (gradeName: string) => {
     const matchedGrade = gradeMasters.find(g => g.name === gradeName);
     const category = matchedGrade ? matchedGrade.category : 'AP';
@@ -167,7 +210,6 @@ export default function GameDetailPage() {
       isFc = false;
       isClear = true;
     } else {
-      // Failed
       isMax = false;
       isAp = false;
       isFc = false;
@@ -252,7 +294,6 @@ export default function GameDetailPage() {
     newItems[index] = newItems[targetIndex];
     newItems[targetIndex] = temp;
 
-    // Recalculate order numbers
     const reordered = newItems.map((item, idx) => ({ ...item, order: idx + 1 }));
     setEditedDiffMasters(reordered);
   };
@@ -264,7 +305,8 @@ export default function GameDetailPage() {
         return {
           ...g,
           gradeMasters: editedGradeMasters,
-          difficultyMasters: editedDiffMasters
+          difficultyMasters: editedDiffMasters,
+          maxMinusFormula: editedFormula
         };
       }
       return g;
@@ -336,6 +378,16 @@ export default function GameDetailPage() {
           const gName = row['Grade (ランク)'] || gradeMasters[0]?.name || 'Pure Memory';
           const { isMax, isAp, isFc, isClear } = calculateFlagsFromGrade(gName);
 
+          const notesVal = row['Notes (ノーツ数)'] ? parseInt(row['Notes (ノーツ数)'], 10) : undefined;
+          const scoreVal = parseInt(row['Score (スコア)'] || row['score'] || '0', 10);
+
+          let computedMaxMinus: number | undefined = undefined;
+          if (row['MAX- (失点)'] !== '' && row['MAX- (失点)'] !== undefined) {
+            computedMaxMinus = parseInt(row['MAX- (失点)'], 10);
+          } else if (currentGame.maxMinusFormula && notesVal !== undefined) {
+            computedMaxMinus = evaluateFormula(currentGame.maxMinusFormula, notesVal, scoreVal);
+          }
+
           return {
             id: row['ID (識別子)'] || `imp-${Date.now()}-${idx}`,
             gameId,
@@ -343,10 +395,10 @@ export default function GameDetailPage() {
             difficulty: row['Difficulty (難易度)'] || row['difficulty'] || difficultyMasters[0]?.name || 'MASTER',
             level: String(row['Level (レベル)'] || row['level'] || '12'),
             constantChart: row['Constant Chart (譜面定数)'] ? parseFloat(row['Constant Chart (譜面定数)']) : undefined,
-            notes: row['Notes (ノーツ数)'] ? parseInt(row['Notes (ノーツ数)'], 10) : undefined,
-            score: parseInt(row['Score (スコア)'] || row['score'] || '0', 10),
+            notes: notesVal,
+            score: scoreVal,
             grade: gName,
-            maxMinus: row['MAX- (失点)'] !== '' ? parseInt(row['MAX- (失点)'], 10) : undefined,
+            maxMinus: computedMaxMinus,
             isAp,
             isFc,
             isClear,
@@ -377,7 +429,6 @@ export default function GameDetailPage() {
     return matchesSearch && matchesAp;
   });
 
-  // Sort logic using difficultyMasters order
   const sortedRecords = [...filteredRecords].sort((a, b) => {
     if (sortBy === 'diffHigh') {
       const orderA = difficultyMasters.find(d => d.name === a.difficulty)?.order ?? 99;
@@ -422,6 +473,11 @@ export default function GameDetailPage() {
           </div>
           <p className="text-xs text-zinc-500 mt-1">
             登録曲数: <span className="font-mono text-zinc-300 font-bold">{currentGameRecords.length} 曲</span>
+            {currentGame.maxMinusFormula && (
+              <span className="ml-3 text-[11px] text-zinc-400">
+                (MAX- 計算式: <span className="font-mono text-zinc-300">{currentGame.maxMinusFormula}</span>)
+              </span>
+            )}
           </p>
         </div>
 
@@ -438,7 +494,7 @@ export default function GameDetailPage() {
 
           <button
             onClick={() => setIsSettingsModalOpen(true)}
-            title="Gradeマッピング & 難易度マスター設定"
+            title="Gradeマッピング, 難易度マスター & MAX-計算式設定"
             className="flex items-center space-x-1 bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-800 px-3 py-2 rounded text-xs transition"
           >
             <Settings className="w-3.5 h-3.5 text-zinc-400" />
@@ -528,7 +584,7 @@ export default function GameDetailPage() {
                 <th className="py-2.5 px-3">譜面定数</th>
                 <th className="py-2.5 px-3">Notes</th>
                 <th className="py-2.5 px-4">Score</th>
-                <th className="py-2.5 px-3">Grade (自動区分)</th>
+                <th className="py-2.5 px-3">Grade</th>
                 <th className="py-2.5 px-3">MAX-</th>
                 <th className="py-2.5 px-3 text-center">{currentGame.apTerm}</th>
                 <th className="py-2.5 px-4">詳細属性</th>
@@ -627,7 +683,6 @@ export default function GameDetailPage() {
               </div>
 
               <div className="grid grid-cols-2 gap-3">
-                {/* Difficulty Master Combobox */}
                 <div>
                   <label className="text-zinc-300 font-medium block mb-1">難易度 (マスターから選択)</label>
                   <select
@@ -672,7 +727,7 @@ export default function GameDetailPage() {
                     type="number"
                     placeholder="例: 2222"
                     value={notes}
-                    onChange={(e) => setNotes(e.target.value)}
+                    onChange={(e) => handleNotesChange(e.target.value)}
                     className="w-full bg-zinc-900 border border-zinc-800 text-zinc-100 rounded px-3 py-2 focus:outline-none focus:border-zinc-600 font-mono"
                   />
                 </div>
@@ -683,16 +738,15 @@ export default function GameDetailPage() {
                     type="number"
                     placeholder="例: 1000000"
                     value={score}
-                    onChange={(e) => setScore(e.target.value)}
+                    onChange={(e) => handleScoreChange(e.target.value)}
                     className="w-full bg-zinc-900 border border-zinc-800 text-zinc-100 rounded px-3 py-2 focus:outline-none focus:border-zinc-600 font-mono"
                   />
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
-                {/* Grade Combobox */}
                 <div>
-                  <label className="text-zinc-300 font-medium block mb-1">Grade / ランク (自動達成判定)</label>
+                  <label className="text-zinc-300 font-medium block mb-1">Grade / ランク (全自動判定)</label>
                   <select
                     value={selectedGradeName}
                     onChange={(e) => setSelectedGradeName(e.target.value)}
@@ -705,7 +759,9 @@ export default function GameDetailPage() {
                 </div>
 
                 <div>
-                  <label className="text-zinc-300 font-medium block mb-1">MAX- (失点数)</label>
+                  <label className="text-zinc-300 font-medium block mb-1">
+                    MAX- (失点数) {currentGame.maxMinusFormula && <span className="text-[10px] text-zinc-400 font-normal">⚡自動計算</span>}
+                  </label>
                   <input
                     type="number"
                     placeholder="例: 0, 5..."
@@ -760,7 +816,7 @@ export default function GameDetailPage() {
         </div>
       )}
 
-      {/* Modal for Game Master Settings (Grade Mappings & Difficulty Order) */}
+      {/* Modal for Game Master Settings (Grade Mappings, Difficulty Order & Formula) */}
       {isSettingsModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
           <div className="bg-[#121215] border border-zinc-700 w-full max-w-xl rounded-lg p-6 space-y-6 shadow-xl max-h-[90vh] overflow-y-auto">
@@ -771,16 +827,37 @@ export default function GameDetailPage() {
               </button>
             </div>
 
-            {/* Section 1: Grade Mappings */}
-            <div className="space-y-3">
-              <h4 className="text-xs font-bold text-zinc-200 border-b border-zinc-800 pb-1">
-                1. Grade (ランク) ＝ 達成区分のマッピング設定
+            {/* Section 1: MAX- Calculation Formula */}
+            <div className="space-y-2">
+              <h4 className="text-xs font-bold text-zinc-200 border-b border-zinc-800 pb-1 flex items-center gap-1.5">
+                <Calculator className="w-3.5 h-3.5 text-zinc-400" />
+                1. MAX- (失点数) 自動計算式
               </h4>
               <p className="text-[11px] text-zinc-400">
-                各Grade名が「MAX」「AP」「FC」「Clear」「Failed」のどれに対応するかを設定すると、入力時にフラグが全自動判定されます。
+                入力時にスコアとノーツ数から MAX- を全自動計算する数式を設定します。（使用可能変数: <code className="font-mono text-zinc-300">notes</code>, <code className="font-mono text-zinc-300">score</code>）
+              </p>
+              <input
+                type="text"
+                placeholder="例: 10000000 + notes - score  または  1010000 - score"
+                value={editedFormula}
+                onChange={(e) => setEditedFormula(e.target.value)}
+                className="w-full bg-zinc-900 border border-zinc-800 text-zinc-100 text-xs rounded px-3 py-2 focus:outline-none focus:border-zinc-600 font-mono"
+              />
+              <p className="text-[10px] text-zinc-500">
+                例(Arcaea): <span className="font-mono text-zinc-400">10000000 + notes - score</span> （理論値は 10,000,000 + ノーツ数のため）
+              </p>
+            </div>
+
+            {/* Section 2: Grade Mappings */}
+            <div className="space-y-3 pt-2">
+              <h4 className="text-xs font-bold text-zinc-200 border-b border-zinc-800 pb-1">
+                2. Grade (ランク) ＝ 達成区分のマッピング設定
+              </h4>
+              <p className="text-[11px] text-zinc-400">
+                各Grade名が「MAX」「AP」「FC」「Clear」「Failed」のどれに対応するかを設定します。
               </p>
 
-              <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
+              <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1">
                 {editedGradeMasters.map((g) => (
                   <div key={g.id} className="flex items-center justify-between bg-zinc-900 border border-zinc-800 px-3 py-1.5 rounded text-xs">
                     <span className="font-semibold text-zinc-200">{g.name}</span>
@@ -836,16 +913,13 @@ export default function GameDetailPage() {
               </div>
             </div>
 
-            {/* Section 2: Difficulty Masters & Reordering */}
+            {/* Section 3: Difficulty Masters & Reordering */}
             <div className="space-y-3 pt-2">
               <h4 className="text-xs font-bold text-zinc-200 border-b border-zinc-800 pb-1">
-                2. 難易度 (Difficulty) マスター ＆ 並び順設定
+                3. 難易度 (Difficulty) マスター ＆ 並び順設定
               </h4>
-              <p className="text-[11px] text-zinc-400">
-                難易度の種類を追加し、▲▼ ボタンで高難易度順に並び替えできます。（テーブルソート等に使用）
-              </p>
 
-              <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
+              <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1">
                 {editedDiffMasters.map((d, idx) => (
                   <div key={d.id} className="flex items-center justify-between bg-zinc-900 border border-zinc-800 px-3 py-1.5 rounded text-xs">
                     <span className="font-bold text-zinc-200">{d.name} <span className="text-[10px] font-normal text-zinc-500 ml-2">(順位: {idx + 1})</span></span>
@@ -882,7 +956,7 @@ export default function GameDetailPage() {
               <div className="flex space-x-2 pt-1 text-xs">
                 <input
                   type="text"
-                  placeholder="新難易度名 (例: BYD, FTR, MASTER...)"
+                  placeholder="新難易度名 (例: BYD, FTR...)"
                   value={newDiffName}
                   onChange={(e) => setNewDiffName(e.target.value)}
                   className="flex-1 bg-zinc-900 border border-zinc-800 text-zinc-100 rounded px-3 py-1.5 focus:outline-none"
@@ -911,7 +985,7 @@ export default function GameDetailPage() {
               <button
                 type="button"
                 onClick={() => setIsSettingsModalOpen(false)}
-                className="px-3 py-1.5 rounded text-zinc-400 hover:bg-zinc-800 transition"
+                className="px-3 py-1.5 rounded text-zinc-400 hover:bg-zinc-800 transition text-xs"
               >
                 キャンセル
               </button>
