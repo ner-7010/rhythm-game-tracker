@@ -1,23 +1,14 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+import { getSupabaseClient } from "@/lib/supabase";
 
 export const dynamic = "force-dynamic";
-
-const getSupabase = () => {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || "";
-  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || "";
-  if (!url || !key) {
-    throw new Error("Supabase URLまたはAPIキーが設定されていません");
-  }
-  return createClient(url, key);
-};
 
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const gameId = searchParams.get("gameId");
 
-    const supabase = getSupabase();
+    const supabase = getSupabaseClient();
     let query = supabase.from("play_records").select("*");
     if (gameId) {
       query = query.eq("game_id", gameId);
@@ -37,7 +28,7 @@ export async function POST(request: Request) {
     const body = await request.json();
     const { mode, gameId, records, record } = body;
 
-    const supabase = getSupabase();
+    const supabase = getSupabaseClient();
 
     if (mode === "replace") {
       if (!gameId) {
@@ -85,7 +76,7 @@ export async function DELETE(request: Request) {
       return NextResponse.json({ error: "Missing record id" }, { status: 400 });
     }
 
-    const supabase = getSupabase();
+    const supabase = getSupabaseClient();
     const { error } = await supabase.from("play_records").delete().eq("id", id);
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });

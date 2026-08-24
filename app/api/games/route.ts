@@ -1,20 +1,11 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+import { getSupabaseClient } from "@/lib/supabase";
 
 export const dynamic = "force-dynamic";
 
-const getSupabase = () => {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || "";
-  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || "";
-  if (!url || !key) {
-    throw new Error("Supabase URLまたはAPIキーが設定されていません");
-  }
-  return createClient(url, key);
-};
-
 export async function GET() {
   try {
-    const supabase = getSupabase();
+    const supabase = getSupabaseClient();
     const { data, error } = await supabase.from("games").select("*").order("created_at", { ascending: true });
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
@@ -33,7 +24,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Invalid games array" }, { status: 400 });
     }
 
-    const supabase = getSupabase();
+    const supabase = getSupabaseClient();
     const { data, error } = await supabase.from("games").upsert(games, { onConflict: "id" });
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
@@ -52,7 +43,7 @@ export async function DELETE(request: Request) {
       return NextResponse.json({ error: "Missing game id" }, { status: 400 });
     }
 
-    const supabase = getSupabase();
+    const supabase = getSupabaseClient();
     const { error } = await supabase.from("games").delete().eq("id", id);
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });

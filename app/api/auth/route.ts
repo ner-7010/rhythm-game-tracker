@@ -1,16 +1,7 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+import { getSupabaseClient } from "@/lib/supabase";
 
 export const dynamic = "force-dynamic";
-
-const getSupabase = () => {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || "";
-  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || "";
-  if (!url || !key) {
-    throw new Error("Supabase URLまたはAPIキーが設定されていません。VercelのEnvironment Variablesをご確認ください。");
-  }
-  return createClient(url, key);
-};
 
 export async function POST(request: Request) {
   try {
@@ -21,7 +12,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "メールアドレスとパスワードを入力してください" }, { status: 400 });
     }
 
-    const supabase = getSupabase();
+    const supabase = getSupabaseClient();
 
     if (action === "signup") {
       const { data, error } = await supabase.auth.signUp({
