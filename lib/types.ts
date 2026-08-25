@@ -31,6 +31,7 @@ export interface GameTitle {
   gradeMasters?: GradeMasterItem[];
   difficultyMasters?: DifficultyMasterItem[];
   customFields?: CustomFieldDefinition[];
+  includeDeletedInStats?: boolean;        // 削除曲を統計に含めるフラグ (機種マスター設定)
 }
 
 export interface CustomFieldDefinition {

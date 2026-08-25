@@ -29,6 +29,7 @@ export const mapDbToGame = (dbGame: any): GameTitle => {
     gradeMasters: dbGame.grade_masters ?? [],
     difficultyMasters: dbGame.difficulty_masters ?? [],
     customFields: dbGame.custom_fields ?? [],
+    includeDeletedInStats: dbGame.include_deleted_in_stats === true,
   };
 };
 
@@ -52,6 +53,7 @@ export const mapGameToDb = (game: GameTitle): any => {
     grade_masters: game.gradeMasters,
     difficulty_masters: game.difficultyMasters,
     custom_fields: game.customFields,
+    include_deleted_in_stats: game.includeDeletedInStats === true,
   };
 };
 

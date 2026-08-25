@@ -50,6 +50,7 @@ export default function AdminPage() {
         'sheet_name': game.sheetName || `[${game.name}]`,
         'device': game.device || 'Mobile',
         'has_max_concept': game.hasMaxConcept !== false ? 'TRUE' : 'FALSE',
+        'include_deleted_in_stats': game.includeDeletedInStats === true ? 'TRUE' : 'FALSE',
         'ap_term': game.apTerm || 'AP',
         'max_term': game.maxTerm || 'MAX',
         'fc_term': game.fcTerm || 'Full Combo',
@@ -170,6 +171,8 @@ export default function AdminPage() {
           // Find existing counts or default
           const existing = existingGames.find(g => g.id === id);
 
+          const incDel = String(row['include_deleted_in_stats'] || 'FALSE').toUpperCase() === 'TRUE';
+
           return {
             id,
             name,
@@ -183,8 +186,10 @@ export default function AdminPage() {
             device,
             hasMaxConcept,
             maxMinusFormula: formula,
-            gradeMasters,
-            difficultyMasters
+            includeDeletedInStats: incDel,
+            gradeMasters: gradeMasters.length > 0 ? gradeMasters : existing?.gradeMasters,
+            difficultyMasters: difficultyMasters.length > 0 ? difficultyMasters : existing?.difficultyMasters,
+            customFields: existing?.customFields || []
           };
         });
 

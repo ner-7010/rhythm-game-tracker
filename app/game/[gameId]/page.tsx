@@ -179,11 +179,14 @@ export default function GameDetailPage() {
   const [newGradeCategory, setNewGradeCategory] = useState<GradeCategory>('AP');
   const [newDiffName, setNewDiffName] = useState('');
 
+  const [editedIncludeDeleted, setEditedIncludeDeleted] = useState<boolean>(currentGame.includeDeletedInStats === true);
+
   useEffect(() => {
     if (currentGame.gradeMasters) setEditedGradeMasters(currentGame.gradeMasters);
     if (currentGame.difficultyMasters) setEditedDiffMasters(currentGame.difficultyMasters);
     setEditedFormula(currentGame.maxMinusFormula || '');
     setEditedHasMax(currentGame.hasMaxConcept !== false);
+    setEditedIncludeDeleted(currentGame.includeDeletedInStats === true);
   }, [currentGame]);
 
   // Auto-Calculate MAX-
@@ -359,7 +362,8 @@ export default function GameDetailPage() {
           gradeMasters: editedGradeMasters,
           difficultyMasters: editedDiffMasters,
           maxMinusFormula: editedFormula,
-          hasMaxConcept: editedHasMax
+          hasMaxConcept: editedHasMax,
+          includeDeletedInStats: editedIncludeDeleted
         };
       }
       return g;
@@ -1176,6 +1180,22 @@ export default function GameDetailPage() {
                   <span>難易度追加</span>
                 </button>
               </div>
+            </div>
+
+            {/* Section 4: Include Deleted Songs in Stats Master Setting */}
+            <div className="space-y-2 pt-2 border-t border-zinc-800">
+              <h4 className="text-xs font-bold text-zinc-200">
+                4. 削除曲の集計・統計フラグ設定 (include_deleted_in_stats)
+              </h4>
+              <label className="flex items-center space-x-2 cursor-pointer bg-zinc-900 border border-zinc-800 p-2.5 rounded">
+                <input
+                  type="checkbox"
+                  checked={editedIncludeDeleted}
+                  onChange={(e) => setEditedIncludeDeleted(e.target.checked)}
+                  className="rounded bg-zinc-950 border-zinc-700 text-rose-600 focus:ring-rose-500"
+                />
+                <span className="text-xs text-zinc-300">削除曲（非公開曲）を全体統計・カード集計にデフォルトで包含する (include_deleted_in_stats)</span>
+              </label>
             </div>
 
             <div className="pt-3 border-t border-zinc-800 flex justify-end space-x-2">
