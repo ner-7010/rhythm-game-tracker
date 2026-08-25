@@ -187,7 +187,23 @@ export default function GameDetailPage() {
     setEditedFormula(currentGame.maxMinusFormula || '');
     setEditedHasMax(currentGame.hasMaxConcept !== false);
     setEditedIncludeDeleted(currentGame.includeDeletedInStats === true);
+    setIncludeDeletedInStats(currentGame.includeDeletedInStats === true);
   }, [currentGame]);
+
+  const handleToggleIncludeDeletedInStats = async (val: boolean) => {
+    setIncludeDeletedInStats(val);
+    const updatedGames = games.map(g => {
+      if (g.id === gameId) {
+        return {
+          ...g,
+          includeDeletedInStats: val
+        };
+      }
+      return g;
+    });
+    setGames(updatedGames);
+    await saveGamesAsync(updatedGames);
+  };
 
   // Auto-Calculate MAX-
   const autoCalculateMaxMinus = (newScoreStr: string, newNotesStr: string) => {
@@ -657,7 +673,7 @@ export default function GameDetailPage() {
               <input
                 type="checkbox"
                 checked={includeDeletedInStats}
-                onChange={(e) => setIncludeDeletedInStats(e.target.checked)}
+                onChange={(e) => handleToggleIncludeDeletedInStats(e.target.checked)}
                 className="sr-only peer"
               />
               <div className="w-7 h-4 bg-zinc-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-zinc-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-rose-600"></div>
